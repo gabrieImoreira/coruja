@@ -34,6 +34,22 @@ transcription speed.
 To start automatically at login: System Settings → General → Login Items →
 add `Sabia.app`.
 
+### ⌃⌥⌘R — the reliable way to start/stop
+
+macOS overlays third-party menu-bar icons with its own orange
+microphone-in-use badge while recording (a privacy feature — every app that
+records audio via a status-bar icon gets this, not a sabia bug). On a full
+menu bar that badge can end up not forwarding clicks to the app underneath,
+so relying on the icon alone to stop a recording isn't reliable. **⌃⌥⌘R
+(Control+Option+Command+R) toggles recording from anywhere**, regardless of
+whether the icon is visible or clickable, and a notification confirms
+start/stop either way.
+
+First use prompts for **Input Monitoring** permission (System Settings →
+Privacy & Security → Input Monitoring) — required for any app-wide global
+keyboard shortcut; harmless without a monitoring purpose, but a real
+permission worth reading the prompt for.
+
 To build the `.app` yourself instead of downloading a release:
 
 ```sh

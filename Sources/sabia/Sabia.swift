@@ -83,6 +83,8 @@ final class AppController {
     private let transcription = TranscriptionCoordinator()
     private var session: RecordingSession?
     private var ticker: Timer?
+    private var globalHotkeyMonitor: Any?
+    private var localHotkeyMonitor: Any?
 
     init(root: URL) {
         self.root = root
@@ -90,6 +92,7 @@ final class AppController {
         menuBar.onOpenFolder = { [weak self] in self?.openFolder() }
         menuBar.onQuit = { [weak self] in self?.shutdown() }
         menuBar.update(recording: false, elapsed: nil)
+        installHotkey()
 
         Task { [transcription, root] in
             await transcription.setStatusHandler { status in
@@ -101,9 +104,38 @@ final class AppController {
         }
     }
 
+    /// Global toggle-recording shortcut (⌃⌥⌘R), independent of the menu bar
+    /// icon. macOS overlays third-party status items with its own orange
+    /// microphone-in-use badge while recording — that badge isn't always
+    /// clickable, so a crowded menu bar (or the system's own privacy
+    /// indicator) can leave the icon with no working click target. The
+    /// hotkey is the reliable way to stop a recording when that happens.
+    /// Requires Input Monitoring permission (System Settings → Privacy &
+    /// Security → Input Monitoring) — silently inert until granted, no crash.
+    private static let hotkeyKeyCode: UInt16 = 15 // kVK_ANSI_R
+    private static let hotkeyModifiers: NSEvent.ModifierFlags = [.control, .option, .command]
+
+    private func installHotkey() {
+        func matches(_ event: NSEvent) -> Bool {
+            event.keyCode == Self.hotkeyKeyCode
+                && event.modifierFlags.intersection(.deviceIndependentFlagsMask) == Self.hotkeyModifiers
+        }
+        globalHotkeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard matches(event) else { return }
+            Task { @MainActor [weak self] in self?.toggle() }
+        }
+        localHotkeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard matches(event) else { return event }
+            self?.toggle()
+            return nil
+        }
+    }
+
     /// Stop any live session cleanly (finalizing files) and exit.
     func shutdown() {
         stopSession()
+        if let globalHotkeyMonitor { NSEvent.removeMonitor(globalHotkeyMonitor) }
+        if let localHotkeyMonitor { NSEvent.removeMonitor(localHotkeyMonitor) }
         NSApp.terminate(nil)
     }
 
@@ -128,6 +160,11 @@ final class AppController {
         }
 
         menuBar.update(recording: true, elapsed: "0:00")
+        // macOS overlays a system microphone badge on top of the menu bar
+        // icon while recording, which can leave it unclickable — this
+        // notification is the only reliable confirmation that recording
+        // actually started (and a reminder that ⌃⌥⌘R stops it).
+        notifyUser(title: "sabia — recording started", body: "⌃⌥⌘R (or the menu) to stop")
         ticker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
         }
@@ -140,6 +177,7 @@ final class AppController {
         FileHandle.standardError.write(Data(
             "○ stopped · \(elapsed) · \(session.dir.path)\n".utf8
         ))
+        notifyUser(title: "sabia — recording stopped", body: "\(elapsed) · \(session.dir.lastPathComponent)")
         self.session = nil
         ticker?.invalidate()
         ticker = nil
