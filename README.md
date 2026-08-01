@@ -6,15 +6,42 @@ separate tracks; when you stop, sabia transcribes both on-device and writes a
 speaker-tagged transcript. Nothing ever leaves the machine.
 
 Fork of [digimata/quill](https://github.com/digimata/quill), same skeleton
-(single Swift binary, menu-bar tray, no app bundle), swapping the default
-transcription engine to **Whisper (WhisperKit)** so meetings in Portuguese
-(or any other language Whisper covers) get transcribed properly — upstream
-quill's default engine, Parakeet, is English-only.
+(single Swift binary, menu-bar tray), swapping the default transcription
+engine to **Whisper (WhisperKit)** so meetings in Portuguese (or any other
+language Whisper covers) get transcribed properly — upstream quill's default
+engine, Parakeet, is English-only.
 
 Named for the *sabiá*, in the same feather/bird theme as quill and its
 sibling [parrot](https://github.com/digimata/parrot).
 
-## Install
+**Requires:** macOS 15+ (Core Audio process taps for system audio — no
+virtual device, no kernel extension). Apple Silicon recommended for
+transcription speed.
+
+## Install — .app (recommended for most people)
+
+1. Download `sabia-<version>-macos.zip` from
+   [Releases](https://github.com/gabrieImoreira/sabia/releases), unzip it,
+   and drag `Sabia.app` to `/Applications`.
+2. **First launch only:** right-click `Sabia.app` → **Open** → **Open**
+   again in the dialog. This app is ad-hoc signed but not notarized by
+   Apple (that requires a paid Developer account), so a normal double-click
+   on the first launch gets blocked by Gatekeeper as "from an unidentified
+   developer" — right-click → Open bypasses that one time only. After the
+   first launch, double-click works normally.
+3. A waveform icon appears in the menu bar. Click it → **Start recording**.
+
+To start automatically at login: System Settings → General → Login Items →
+add `Sabia.app`.
+
+To build the `.app` yourself instead of downloading a release:
+
+```sh
+cd sabia
+./scripts/build-app.sh        # -> .build/Sabia.app, .build/sabia-<version>-macos.zip
+```
+
+## Install — CLI binary (for terminal / LaunchAgent use)
 
 ```sh
 cd sabia
@@ -22,10 +49,6 @@ swift build -c release
 sudo cp .build/release/sabia /usr/local/bin/sabia
 sabia install --launch-at-login   # optional — runs in the background on login
 ```
-
-**Requires:** macOS 15+ (Core Audio process taps for system audio — no
-virtual device, no kernel extension). Apple Silicon recommended for
-transcription speed.
 
 ## How to use
 
