@@ -77,13 +77,13 @@ actor TranscriptionCoordinator {
             publish(.transcribing(session: dir.lastPathComponent, queued: queue.count))
             do {
                 try await transcribe(dir)
-                notifyUser(title: "quill — transcript ready", body: dir.lastPathComponent)
+                notifyUser(title: "sabia — transcript ready", body: dir.lastPathComponent)
                 runHook(for: dir)
             } catch {
                 log(dir, "transcription failed: \(error)")
                 lastFailure = dir.lastPathComponent
                 notifyUser(
-                    title: "quill — transcription failed",
+                    title: "sabia — transcription failed",
                     body: "\(dir.lastPathComponent) — see transcribe.log"
                 )
             }
@@ -143,12 +143,18 @@ actor TranscriptionCoordinator {
     private func preparedEngine() async throws -> TranscriptionEngine {
         if let engine { return engine }
         let configured = Config.transcriptionEngine()
-        if configured != "parakeet" {
+        let engine: TranscriptionEngine
+        switch configured {
+        case "parakeet":
+            engine = ParakeetEngine()
+        case "whisper":
+            engine = WhisperEngine(language: Config.transcriptionLanguage())
+        default:
             FileHandle.standardError.write(Data(
-                "warning: unknown transcription engine \"\(configured)\" — using parakeet\n".utf8
+                "warning: unknown transcription engine \"\(configured)\" — using whisper\n".utf8
             ))
+            engine = WhisperEngine(language: Config.transcriptionLanguage())
         }
-        let engine = ParakeetEngine()
         try await engine.prepare()
         self.engine = engine
         return engine

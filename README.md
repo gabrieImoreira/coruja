@@ -1,20 +1,26 @@
-# quill
+# sabia
 
-A minimal, fully local macOS meeting recorder + transcriber. One menu-bar
-click records your mic and all system audio as two separate tracks; when you
-stop, quill transcribes both on-device and writes a speaker-tagged transcript.
-Nothing ever leaves the machine.
+A minimal, fully local macOS meeting recorder + transcriber, **tuned for
+Portuguese**. One menu-bar click records your mic and all system audio as two
+separate tracks; when you stop, sabia transcribes both on-device and writes a
+speaker-tagged transcript. Nothing ever leaves the machine.
 
-Named for the feather. Sibling of [parrot](https://github.com/digimata/parrot), same skeleton: single
-Swift binary, menu-bar tray, no app bundle.
+Fork of [digimata/quill](https://github.com/digimata/quill), same skeleton
+(single Swift binary, menu-bar tray, no app bundle), swapping the default
+transcription engine to **Whisper (WhisperKit)** so meetings in Portuguese
+(or any other language Whisper covers) get transcribed properly — upstream
+quill's default engine, Parakeet, is English-only.
+
+Named for the *sabiá*, in the same feather/bird theme as quill and its
+sibling [parrot](https://github.com/digimata/parrot).
 
 ## Install
 
 ```sh
-cd quill
+cd sabia
 swift build -c release
-sudo cp .build/release/quill /usr/local/bin/quill
-quill install --launch-at-login   # optional — runs in the background on login
+sudo cp .build/release/sabia /usr/local/bin/sabia
+sabia install --launch-at-login   # optional — runs in the background on login
 ```
 
 **Requires:** macOS 15+ (Core Audio process taps for system audio — no
@@ -23,7 +29,7 @@ transcription speed.
 
 ## How to use
 
-1. **Run it** (`quill` in a terminal, or the LaunchAgent).
+1. **Run it** (`sabia` in a terminal, or the LaunchAgent).
 2. **Click the feather in the menu bar → Start recording.** First use prompts
    for microphone and System Audio Recording permissions. While recording, the
    icon turns red with a running elapsed counter, and macOS shows the purple
@@ -51,12 +57,16 @@ written is still readable.
 
 ## Transcription
 
-Built in, on-device, automatic. The default engine is **Parakeet TDT 0.6B v2**
-(English) via [FluidAudio](https://github.com/FluidInference/FluidAudio)'s
-Core ML port — roughly 20 seconds per hour of audio on Apple Silicon. Models
-(~600 MB) download once on first transcription; `quill doctor` tells you
-whether they're already cached so you're never downloading after an important
-meeting.
+Built in, on-device, automatic. The default engine is **Whisper large-v3-turbo**
+via [WhisperKit](https://github.com/argmaxinc/argmax-oss-swift)'s Core ML port
+— multilingual, decoding in Portuguese by default (`transcription.language`,
+default `"pt"`). Models (~1.5 GB) download once on first transcription;
+`sabia doctor` reminds you to warm the cache before an important meeting.
+
+**Parakeet TDT 0.6B v2** (English-only, via
+[FluidAudio](https://github.com/FluidInference/FluidAudio), ~600 MB, faster —
+roughly 20 seconds per hour of audio) is kept as an opt-in alternative for
+English-only meetings — set `"engine": "parakeet"` in config.
 
 Each track is transcribed separately, shifted by its start offset so both
 share one clock, and merged by timestamp. Jobs run in a serial queue — you can
@@ -65,17 +75,30 @@ on next launch (the filesystem is the queue: a session with `meta.json` but no
 `transcript.json` is pending). Failures append to the session's
 `transcribe.log` and never block later jobs.
 
-The engine sits behind a small protocol; a Whisper engine (WhisperKit
-large-v3-turbo) is planned as the fallback / re-transcription option.
+The engine sits behind a small protocol (`TranscriptionEngine`), so adding a
+third engine is a self-contained file — see `WhisperEngine.swift` /
+`ParakeetEngine.swift`.
+
+### Accuracy vs. cloud transcription (e.g. coconote)
+
+Whisper large-v3-turbo running locally does **solid** Portuguese transcription
+for clear, single-speaker audio — but it's realistic to expect more mistakes
+on proper nouns, jargon, and noisy/accented speech than a cloud service that
+runs a bigger model and/or LLM post-processing on top. What you get in
+exchange: **zero marginal cost per meeting** (no subscription, no per-minute
+API billing) and **zero audio leaving the machine**. If accuracy on a specific
+kind of meeting turns out to be the bottleneck, the natural next step is
+post-processing `transcript.json` through an LLM pass (cleanup, punctuation,
+custom vocabulary) — the engine boundary already isolates that from capture.
 
 ## Config
 
-Optional, at `~/.config/quill/config.json`:
+Optional, at `~/.config/sabia/config.json`:
 
 ```json
 {
   "recordings_dir": "~/Recordings",
-  "transcription": { "enabled": true, "engine": "parakeet" },
+  "transcription": { "enabled": true, "engine": "whisper", "language": "pt" },
   "on_stop": "my-hook"
 }
 ```
@@ -83,6 +106,11 @@ Optional, at `~/.config/quill/config.json`:
 - `recordings_dir` — where sessions land. Resolution order: `--out` flag >
   config > `~/Recordings`.
 - `transcription.enabled` — set `false` to just record.
+- `transcription.engine` — `"whisper"` (default, multilingual) or `"parakeet"`
+  (English-only, faster/smaller).
+- `transcription.language` — ISO-639-1 code passed to Whisper's decoder.
+  Default `"pt"`. Set `"auto"` to let Whisper detect the language per segment
+  (useful for mixed-language meetings). Ignored by `parakeet`.
 - `mic_voice_processing` — Apple's echo cancellation on the mic (default off).
   Set `true` when recording meetings through the speakers, so playback doesn't
   bleed into the mic track and get transcribed twice as "me". The trade: while
@@ -97,11 +125,11 @@ Optional, at `~/.config/quill/config.json`:
 ## CLI
 
 ```sh
-quill                        # run the menu-bar daemon (^C to quit)
-quill run --out <dir>        # custom recordings root (default ~/Recordings)
-quill doctor                 # check permissions, recordings folder, models
-quill install --launch-at-login
-quill install --uninstall
+sabia                        # run the menu-bar daemon (^C to quit)
+sabia run --out <dir>        # custom recordings root (default ~/Recordings)
+sabia doctor                 # check permissions, recordings folder, models
+sabia install --launch-at-login
+sabia install --uninstall
 ```
 
 ## Stack
@@ -111,7 +139,8 @@ quill install --uninstall
   system audio capture via a private aggregate device
 - **AVAudioEngine** — mic capture
 - **AVAudioFile** — streaming AAC encode into CAF
-- **FluidAudio / Parakeet** — on-device Core ML transcription
+- **WhisperKit / Whisper large-v3-turbo** — on-device Core ML transcription (default, multilingual)
+- **FluidAudio / Parakeet** — on-device Core ML transcription (opt-in, English-only)
 - **NSStatusItem** — the whole UI
 
 ## Gotchas
@@ -121,7 +150,13 @@ quill install --uninstall
   per-process picker if it bothers you).
 - If recordings come out silent, check System Settings → Privacy & Security →
   Screen & System Audio Recording.
-- Parakeet v2 is English-only. Other languages will come with the Whisper
-  engine.
 - The binary embeds its Info.plist (`__TEXT,__info_plist`) so TCC can
-  attribute permissions to quill itself when running as a LaunchAgent.
+  attribute permissions to sabia itself when running as a LaunchAgent.
+
+## Relationship to upstream
+
+This is a fork, not a drop-in replacement — the binary, bundle identifier
+(`com.gabrieImoreira.sabia`), config path, and default engine all diverge from
+quill so the two can coexist on the same machine. Recording/capture code is
+unchanged from upstream; the divergence is entirely in the transcription
+layer and naming. MIT license, same as upstream (see `LICENSE`).

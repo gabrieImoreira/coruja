@@ -39,7 +39,7 @@ enum DoctorReport {
             return Check(
                 name: "microphone",
                 status: .fail("denied"),
-                remediation: "System Settings → Privacy & Security → Microphone → enable for quill (or your terminal)"
+                remediation: "System Settings → Privacy & Security → Microphone → enable for sabia (or your terminal)"
             )
         @unknown default:
             return Check(name: "microphone", status: .fail("unknown state"), remediation: nil)
@@ -77,7 +77,10 @@ enum DoctorReport {
     }
 
     /// Never discover a missing model after an important meeting: report
-    /// whether the parakeet models are already in FluidAudio's cache.
+    /// whether the configured engine's models are already cached locally.
+    /// Parakeet's cache is checkable directly (FluidAudio exposes the path);
+    /// WhisperKit resolves and caches its own Hub snapshot internally with no
+    /// equivalent public existence check, so whisper just gets a reminder.
     static func checkTranscription() -> Check {
         guard Config.transcriptionEnabled() else {
             return Check(
@@ -86,15 +89,24 @@ enum DoctorReport {
                 remediation: nil
             )
         }
-        let cache = AsrModels.defaultCacheDirectory(for: .v2)
-        if AsrModels.modelsExist(at: cache, version: .v2) {
-            return Check(name: "transcription", status: .ok, remediation: nil)
+        switch Config.transcriptionEngine() {
+        case "parakeet":
+            let cache = AsrModels.defaultCacheDirectory(for: .v2)
+            if AsrModels.modelsExist(at: cache, version: .v2) {
+                return Check(name: "transcription", status: .ok, remediation: nil)
+            }
+            return Check(
+                name: "transcription",
+                status: .warn("parakeet models not downloaded (~600 MB)"),
+                remediation: "downloads automatically on first transcription — record a short test session while online"
+            )
+        default:
+            return Check(
+                name: "transcription",
+                status: .warn("whisper (\(Config.transcriptionLanguage() ?? "auto")) — model downloads (~1.5 GB) on first transcription if not already cached"),
+                remediation: "record a short test session while online to warm the cache before an important meeting"
+            )
         }
-        return Check(
-            name: "transcription",
-            status: .warn("parakeet models not downloaded (~600 MB)"),
-            remediation: "downloads automatically on first transcription — record a short test session while online"
-        )
     }
 
     static func print(_ checks: [Check]) {

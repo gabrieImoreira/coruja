@@ -1,6 +1,6 @@
 import Foundation
 
-/// Optional user config at ~/.config/quill/config.json:
+/// Optional user config at ~/.config/sabia/config.json:
 ///
 ///     {
 ///       "recordings_dir": "~/Recordings",
@@ -15,7 +15,7 @@ import Foundation
 /// after recording when transcription is disabled.
 enum Config {
     static let path = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/quill/config.json")
+        .appendingPathComponent(".config/sabia/config.json")
 
     static let defaultRoot = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent("Recordings", isDirectory: true)
@@ -38,10 +38,21 @@ enum Config {
         transcription()?["enabled"] as? Bool ?? true
     }
 
-    /// Configured engine name. Only "parakeet" ships today; the coordinator
-    /// warns and falls back for anything else.
+    /// Configured engine name: "whisper" (multilingual, WhisperKit — sabia's
+    /// default, since the whole point of this fork is pt-BR) or "parakeet"
+    /// (English-only, FluidAudio, kept for parity with upstream quill). The
+    /// coordinator warns and falls back to whisper for anything unrecognized.
     static func transcriptionEngine() -> String {
-        transcription()?["engine"] as? String ?? "parakeet"
+        transcription()?["engine"] as? String ?? "whisper"
+    }
+
+    /// ISO-639-1 language code passed to the whisper engine's decoder (e.g.
+    /// "pt"). `nil` (or the literal "auto") lets Whisper detect it per
+    /// segment — useful for mixed-language meetings. Ignored by parakeet,
+    /// which is English-only.
+    static func transcriptionLanguage() -> String? {
+        guard let lang = transcription()?["language"] as? String, !lang.isEmpty else { return "pt" }
+        return lang == "auto" ? nil : lang
     }
 
     private static func transcription() -> [String: Any]? {
