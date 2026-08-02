@@ -14,6 +14,8 @@ struct NotesRootView: View {
     @State private var sessions: [SessionEntry] = []
     @State private var selection: URL?
     @State private var transcriptText: String = ""
+    @State private var copied = false
+    @StateObject private var player = AudioPlayerModel()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -81,6 +83,10 @@ struct NotesRootView: View {
                         .font(.title2).bold()
                         .padding()
                     Divider()
+                    if FileManager.default.fileExists(atPath: session.audioURL.path) {
+                        playerBar
+                        Divider()
+                    }
                     ScrollView {
                         Text(transcriptText)
                             .textSelection(.enabled)
@@ -89,8 +95,15 @@ struct NotesRootView: View {
                     }
                     Divider()
                     HStack {
-                        Button("Reproduzir áudio") { NSWorkspace.shared.open(session.audioURL) }
-                            .disabled(!FileManager.default.fileExists(atPath: session.audioURL.path))
+                        Button {
+                            let pasteboard = NSPasteboard.general
+                            pasteboard.clearContents()
+                            pasteboard.setString(transcriptText, forType: .string)
+                            copied = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
+                        } label: {
+                            Label(copied ? "Copiado" : "Copiar transcrição", systemImage: copied ? "checkmark" : "doc.on.doc")
+                        }
                         Button("Abrir pasta") { NSWorkspace.shared.open(session.id) }
                         Spacer()
                     }
@@ -98,6 +111,11 @@ struct NotesRootView: View {
                 }
                 .onChange(of: selection, initial: true) { _, _ in
                     transcriptText = SessionScanner.transcriptText(for: session)
+                    if FileManager.default.fileExists(atPath: session.audioURL.path) {
+                        player.load(session.audioURL)
+                    } else {
+                        player.stop()
+                    }
                 }
             } else {
                 Text(sessions.isEmpty ? "Nenhuma gravação ainda" : "Selecione uma gravação")
@@ -105,6 +123,42 @@ struct NotesRootView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+    }
+
+    private var playerBar: some View {
+        HStack(spacing: 12) {
+            Button(action: player.togglePlayPause) {
+                Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+            }
+            .buttonStyle(.borderless)
+            .font(.title3)
+
+            Text(Self.formatTime(player.currentTime))
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .font(.caption)
+
+            Slider(
+                value: Binding(
+                    get: { player.currentTime },
+                    set: { player.seek(to: $0) }
+                ),
+                in: 0...max(player.duration, 0.1)
+            )
+
+            Text(Self.formatTime(player.duration))
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .font(.caption)
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 10)
+    }
+
+    private static func formatTime(_ seconds: TimeInterval) -> String {
+        guard seconds.isFinite, seconds >= 0 else { return "0:00" }
+        let total = Int(seconds)
+        return String(format: "%d:%02d", total / 60, total % 60)
     }
 
     private func reload() {
