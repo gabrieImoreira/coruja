@@ -348,8 +348,8 @@ struct NotesRootView: View {
                     .foregroundStyle(theme.timestampColor)
             }
             Text(segment.text)
-                .font(.system(size: 16.5, design: .serif))
-                .lineSpacing(6)
+                .font(.system(size: 14, weight: .regular, design: .default))
+                .lineSpacing(4)
                 .foregroundStyle(theme.bodyColor)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
