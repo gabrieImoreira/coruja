@@ -85,10 +85,16 @@ struct NotesRootView: View {
 
             Button(action: onToggleRecording) {
                 HStack(spacing: 9) {
-                    Circle()
-                        .fill(status.isRecording ? Color.white : theme.recordIdleColor)
-                        .frame(width: 8, height: 8)
-                        .opacity(status.isRecording && recordDotPulsed ? 0.35 : 1)
+                    if status.isRecording {
+                        RoundedRectangle(cornerRadius: 2, style: .continuous)
+                            .fill(Color.white)
+                            .frame(width: 9, height: 9)
+                            .opacity(recordDotPulsed ? 0.35 : 1)
+                    } else {
+                        Circle()
+                            .fill(theme.recordIdleColor)
+                            .frame(width: 8, height: 8)
+                    }
                     Text(status.isRecording ? "Parar gravação" : "Iniciar gravação")
                         .font(.system(size: 13, weight: .semibold))
                 }
