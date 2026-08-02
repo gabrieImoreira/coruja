@@ -1,4 +1,4 @@
-# Coruja
+# coruja
 
 Um app para Mac que **grava suas reuniões e já transcreve em português**,
 tudo no seu computador — nada é enviado para a internet. Feito para quem
@@ -48,14 +48,14 @@ System Settings → General → Login Items → adicione o `Coruja.app`.
 
 ## Como usar
 
-Depois de instalado, a Coruja fica rodando discretamente com um ícone na
+Depois de instalado, a coruja fica rodando discretamente com um ícone na
 barra de menu (topo da tela) e outro no Dock.
 
 **Pra gravar uma reunião**, qualquer uma dessas opções funciona:
-- Clique no ícone da Coruja (barra de menu ou Dock) → **Iniciar gravação**
+- Clique no ícone da coruja (barra de menu ou Dock) → **Iniciar gravação**
 - Aperte **⌃⌥⌘R** (Control + Option + Command + R) no teclado, de qualquer
   lugar
-- Se a reunião for pelo Chrome (Google Meet ou Teams), a Coruja identifica
+- Se a reunião for pelo Chrome (Google Meet ou Teams), a coruja identifica
   sozinho e pergunta **"Gravar?"** — é só clicar em **Gravar**
 
 **Pra parar**, é a mesma coisa: clique de novo, ou aperte ⌃⌥⌘R, ou (se a
@@ -64,7 +64,7 @@ para sozinha.
 
 Quando a gravação termina, a transcrição começa automaticamente e uma
 notificação avisa quando estiver pronta. Para ver, ouvir ou apagar
-qualquer gravação, abra a janela da Coruja clicando no ícone do Dock.
+qualquer gravação, abra a janela da coruja clicando no ícone do Dock.
 
 ### Onde ficam os arquivos
 
@@ -97,7 +97,7 @@ driver virtual, sem kernel extension). Apple Silicon recomendado.
 
 ### Por que existe um ícone permanente no Dock
 
-O quill original não tem ícone no Dock, só na barra de menu. A Coruja
+O quill original não tem ícone no Dock, só na barra de menu. A coruja
 mantém um ícone fixo no Dock por um motivo concreto, descoberto na prática:
 o macOS pode descartar silenciosamente o ícone de terceiros na barra de
 menu quando ela está cheia — sem aviso, sem seta de "mais ícones" — e
@@ -118,7 +118,7 @@ de teclado global.
 
 ### Detecção automática de reunião (Google Meet / Teams no Chrome)
 
-A Coruja varre as abas abertas do Chrome a cada 5 segundos procurando uma
+A coruja varre as abas abertas do Chrome a cada 5 segundos procurando uma
 URL de reunião do Google Meet ou Microsoft Teams. Ao encontrar, mostra um
 aviso no canto superior direito — **Gravar** / **Ignorar**. Se aceitar, a
 gravação para sozinha quando aquela aba específica fecha ou muda de URL.
@@ -129,7 +129,7 @@ antes de entrar na call, não só numa call já em andamento. Por isso a
 detecção só mostra um aviso dispensável, nunca grava sozinha sem
 confirmação.
 
-Na primeira detecção, pede permissão de automação **"Coruja quer controlar
+Na primeira detecção, pede permissão de automação **"coruja quer controlar
 o Google Chrome"** (System Settings → Privacy & Security → Automation) —
 sem ela, a detecção simplesmente não funciona (sem erro, sem travar).
 
@@ -262,11 +262,11 @@ coruja install --uninstall
   você — na caixa de som (não fone), o áudio tocado vaza acusticamente de
   volta pro mic, e as duas trilhas capturam quase a mesma coisa,
   duplicando o texto uma vez como "me" e outra como "them". Chamadas reais
-  de duas pessoas por fone não sofrem disso; testar a Coruja tocando um
+  de duas pessoas por fone não sofrem disso; testar a coruja tocando um
   vídeo/música na caixa em vez de uma call de verdade mostra esse efeito.
   Correção: use fone, ou ative `mic_voice_processing: true` no config.
 - O binário embute seu Info.plist (`__TEXT,__info_plist`) pra que o TCC
-  atribua permissões à Coruja mesmo rodando como LaunchAgent sem bundle.
+  atribua permissões à coruja mesmo rodando como LaunchAgent sem bundle.
 
 ### Relação com o upstream
 

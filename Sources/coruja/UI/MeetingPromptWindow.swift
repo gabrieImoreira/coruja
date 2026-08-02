@@ -37,7 +37,7 @@ final class MeetingPromptWindow: NSObject {
         let content = NSView(frame: panel.contentRect(forFrameRect: panel.frame))
         content.wantsLayer = true
 
-        let label = NSTextField(labelWithString: "Reunião detectada no Chrome.\nGravar com a Coruja?")
+        let label = NSTextField(labelWithString: "Reunião detectada no Chrome.\nGravar com a coruja?")
         label.font = .systemFont(ofSize: 12)
         label.lineBreakMode = .byWordWrapping
         label.maximumNumberOfLines = 2

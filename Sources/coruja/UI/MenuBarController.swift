@@ -33,7 +33,7 @@ final class MenuBarController {
         menu.addItem(.separator())
 
         let openNotes = NSMenuItem(
-            title: "Abrir a Coruja",
+            title: "Abrir a coruja",
             action: #selector(openNotesClicked),
             keyEquivalent: "n"
         )
@@ -56,7 +56,7 @@ final class MenuBarController {
         menu.addItem(.separator())
 
         let quit = NSMenuItem(
-            title: "Sair da Coruja",
+            title: "Sair da coruja",
             action: #selector(quitClicked),
             keyEquivalent: "q"
         )

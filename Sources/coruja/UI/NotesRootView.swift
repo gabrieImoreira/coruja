@@ -103,7 +103,7 @@ struct NotesRootView: View {
         }
         .listStyle(.sidebar)
         .navigationSplitViewColumnWidth(min: 200, ideal: 230)
-        .navigationTitle("Coruja")
+        .navigationTitle("coruja")
     }
 
     // MARK: - Detail

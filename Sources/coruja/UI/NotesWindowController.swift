@@ -15,7 +15,7 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = "Coruja"
+        window.title = "coruja"
         window.center()
         window.contentView = NSHostingView(
             rootView: NotesRootView(root: root, status: status, onToggleRecording: onToggleRecording)

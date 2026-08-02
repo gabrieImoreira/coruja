@@ -5,9 +5,9 @@
     <key>CFBundleIdentifier</key>
     <string>com.gabrieImoreira.coruja</string>
     <key>CFBundleName</key>
-    <string>Coruja</string>
+    <string>coruja</string>
     <key>CFBundleDisplayName</key>
-    <string>Coruja</string>
+    <string>coruja</string>
     <key>CFBundleExecutable</key>
     <string>coruja</string>
     <key>CFBundleIconFile</key>
