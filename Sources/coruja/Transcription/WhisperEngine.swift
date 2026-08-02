@@ -67,6 +67,20 @@ actor WhisperEngine: TranscriptionEngine {
             skipSpecialTokens: true,
             withoutTimestamps: false,
             wordTimestamps: false,
+            // Defaults (compressionRatioThreshold 2.4, logProbThreshold -1.0,
+            // noSpeechThreshold 0.6) come straight from OpenAI's Whisper CLI,
+            // tuned for clean studio-ish audio. Confirmed live: on real
+            // room-mic audio with genuine speech throughout (verified via
+            // raw RMS analysis, not just re-reading the transcript), the
+            // decoder exhausted every temperature fallback and still
+            // discarded the whole track as unreliable — the model was too
+            // eager to call quiet/casual speech "no speech". Relaxed so it
+            // errs toward keeping uncertain output instead of silently
+            // dropping it; a wrong word beats a missing sentence here.
+            compressionRatioThreshold: 3.2,
+            logProbThreshold: -1.7,
+            firstTokenLogProbThreshold: -3.0,
+            noSpeechThreshold: 0.9,
             chunkingStrategy: ChunkingStrategy.none
         )
 
