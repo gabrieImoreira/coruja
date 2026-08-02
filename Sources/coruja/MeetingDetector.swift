@@ -37,8 +37,8 @@ actor MeetingDetector {
         onMeetingEnded = onEnded
     }
 
-    func poll() {
-        let urls = Self.chromeTabURLs()
+    func poll() async {
+        let urls = await Self.chromeTabURLs()
         let match = urls.first { Self.matches($0) }
 
         if let match, currentMeetingURL == nil {
@@ -58,7 +58,25 @@ actor MeetingDetector {
     /// Runs a short AppleScript via osascript to list every tab URL in every
     /// Chrome window, one per line. Checks `is running` first so a closed
     /// Chrome never gets launched just to be polled.
-    private static func chromeTabURLs() -> [String] {
+    ///
+    /// This shells out and blocks on a pipe read — genuinely synchronous,
+    /// not just "awaits something". Confirmed live: with enough Chrome
+    /// windows/tabs open, the AppleScript round-trip can take long enough
+    /// that running it directly on an actor method starves Swift
+    /// Concurrency's cooperative thread pool, stalling unrelated work
+    /// (the transcription queue included) for as long as it blocks. Runs on
+    /// a plain background queue instead — outside that pool entirely — with
+    /// a hard timeout so a slow/unresponsive Chrome can never block longer
+    /// than a few seconds.
+    private static func chromeTabURLs() async -> [String] {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .utility).async {
+                continuation.resume(returning: runChromeTabsScript())
+            }
+        }
+    }
+
+    private static func runChromeTabsScript() -> [String] {
         let script = """
         if application "Google Chrome" is running then
             tell application "Google Chrome"
@@ -85,7 +103,18 @@ actor MeetingDetector {
         } catch {
             return []
         }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+
+        var data = Data()
+        let readGroup = DispatchGroup()
+        readGroup.enter()
+        DispatchQueue.global(qos: .utility).async {
+            data = pipe.fileHandleForReading.readDataToEndOfFile()
+            readGroup.leave()
+        }
+        if readGroup.wait(timeout: .now() + 4) == .timedOut {
+            task.terminate()
+            return []
+        }
         task.waitUntilExit()
         guard let text = String(data: data, encoding: .utf8) else { return [] }
         return text.split(whereSeparator: \.isNewline).map(String.init)
