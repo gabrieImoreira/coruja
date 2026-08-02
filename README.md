@@ -1,254 +1,271 @@
 # sabia
 
-A minimal, fully local macOS meeting recorder + transcriber, **tuned for
-Portuguese**. One menu-bar click records your mic and all system audio as two
-separate tracks; when you stop, sabia transcribes both on-device and writes a
-speaker-tagged transcript. Nothing ever leaves the machine.
+Um app para Mac que **grava suas reuniões e já transcreve em português**,
+tudo no seu computador — nada é enviado para a internet. Feito para quem
+usa Google Meet ou Microsoft Teams pelo Chrome e quer um registro em texto
+de cada conversa, sem depender de um serviço pago.
 
-Fork of [digimata/quill](https://github.com/digimata/quill), same skeleton
-(single Swift binary, menu-bar tray), swapping the default transcription
-engine to **Whisper (WhisperKit)** so meetings in Portuguese (or any other
-language Whisper covers) get transcribed properly — upstream quill's default
-engine, Parakeet, is English-only.
+## O que ele faz
 
-Named for the *sabiá*, in the same feather/bird theme as quill and its
-sibling [parrot](https://github.com/digimata/parrot).
+- **Grava** o que você fala e o que a outra pessoa fala, ao mesmo tempo.
+- **Transcreve automaticamente** para texto em português, assim que a
+  gravação termina.
+- **Detecta sozinho** quando você entra numa reunião do Meet ou Teams pelo
+  Chrome, e pergunta se quer gravar.
+- **Guarda tudo localmente** no seu Mac, em `~/Recordings` — nada sobe pra
+  nuvem, nenhum servidor externo envolvido.
+- Tem uma janela própria para ver a lista de reuniões gravadas, ler a
+  transcrição, ouvir o áudio e apagar gravações que não quiser mais.
 
-**Requires:** macOS 15+ (Core Audio process taps for system audio — no
-virtual device, no kernel extension). Apple Silicon recommended for
-transcription speed.
+Não gera resumo automático (ainda) — só a transcrição, palavra por palavra,
+com marcação de quem falou o quê.
 
-## Install — .app (recommended for most people)
+## Como instalar
 
-1. Download `sabia-<version>-macos.zip` from
-   [Releases](https://github.com/gabrieImoreira/sabia/releases), unzip it,
-   and drag `Sabia.app` to `/Applications`.
-2. **First launch only:** right-click `Sabia.app` → **Open** → **Open**
-   again in the dialog. This app is ad-hoc signed but not notarized by
-   Apple (that requires a paid Developer account), so a normal double-click
-   on the first launch gets blocked by Gatekeeper as "from an unidentified
-   developer" — right-click → Open bypasses that one time only. After the
-   first launch, double-click works normally.
-3. A waveform icon appears in **both** the menu bar and the Dock. Click
-   either → **Start recording** (or open the Dock icon for the full notes
-   window — session list + transcript reader + a record/stop button, no
-   different from opening any other app).
+1. Vá em [Releases](https://github.com/gabrieImoreira/sabia/releases) e
+   baixe o arquivo `sabia-<versão>-macos.zip` mais recente.
+2. Descompacte e arraste o `Sabia.app` para a pasta **Aplicativos**.
+3. **Só na primeira vez**: como este app não passou pelo processo pago de
+   certificação da Apple, o macOS vai bloquear um duplo-clique normal com
+   um aviso de "desenvolvedor não identificado". Para abrir:
+   - Clique **com o botão direito** em cima do `Sabia.app`
+   - Escolha **Abrir**
+   - Na janela que aparecer, clique em **Abrir** de novo
 
-To start automatically at login: System Settings → General → Login Items →
-add `Sabia.app`.
+   Depois disso, o app abre normalmente com duplo-clique, como qualquer
+   outro.
+4. Na primeira gravação, o macOS vai pedir permissão de **Microfone** e de
+   **Gravação de Áudio do Sistema** — aceite as duas, senão a gravação sai
+   muda.
 
-### Why there's a Dock icon at all
+Pronto, é só isso. Se quiser que o app abra sozinho sempre que ligar o Mac:
+System Settings → General → Login Items → adicione o `Sabia.app`.
 
-Upstream quill is deliberately menu-bar-only, no Dock icon. sabia keeps a
-**permanent Dock icon** instead, for a concrete reason found the hard way:
-macOS will silently drop a third-party menu bar icon when the bar is full —
-no warning, no overflow chevron on some setups — and separately overlays
-its own orange microphone badge on top of a recording app's menu bar icon,
-which can stop forwarding clicks to the app underneath. Both were observed
-live during development. The Dock icon isn't subject to either: it's always
-there, always clickable, and clicking it (or double-clicking the app) opens
-the notes window if none is open.
+## Como usar
 
-### ⌃⌥⌘R — start/stop from anywhere, no click needed
+Depois de instalado, o sabia fica rodando discretamente com um ícone na
+barra de menu (topo da tela) e outro no Dock.
 
-**⌃⌥⌘R (Control+Option+Command+R) toggles recording** regardless of what's
-visible on screen, with a notification confirming start/stop either way —
-useful when both the menu bar and Dock happen to be out of reach (e.g. a
-fullscreen app in another Space).
+**Pra gravar uma reunião**, qualquer uma dessas opções funciona:
+- Clique no ícone do sabia (barra de menu ou Dock) → **Iniciar gravação**
+- Aperte **⌃⌥⌘R** (Control + Option + Command + R) no teclado, de qualquer
+  lugar
+- Se a reunião for pelo Chrome (Google Meet ou Teams), o sabia identifica
+  sozinho e pergunta **"Gravar?"** — é só clicar em **Gravar**
 
-First use prompts for **Input Monitoring** permission (System Settings →
-Privacy & Security → Input Monitoring) — required for any app-wide global
-keyboard shortcut; harmless without a monitoring purpose, but a real
-permission worth reading the prompt for.
+**Pra parar**, é a mesma coisa: clique de novo, ou aperte ⌃⌥⌘R, ou (se a
+reunião foi detectada automaticamente) feche a aba do Chrome — a gravação
+para sozinha.
 
-### Automatic meeting detection (Google Meet / Teams in Chrome)
+Quando a gravação termina, a transcrição começa automaticamente e uma
+notificação avisa quando estiver pronta. Para ver, ouvir ou apagar
+qualquer gravação, abra a janela do sabia clicando no ícone do Dock.
 
-sabia polls Chrome's open tabs every 5 seconds for a Google Meet or
-Microsoft Teams meeting URL. When one shows up, a small prompt appears in
-the top-right corner — **Gravar** / **Ignorar**. Accept it and sabia starts
-recording; when that same meeting's tab closes or navigates away, the
-recording **stops automatically**.
+### Onde ficam os arquivos
 
-There's no public macOS API for "a meeting is in progress," so this is a
-URL-pattern heuristic — it can trigger on the pre-join lobby, not only an
-actually-joined call. That's on purpose: detection only ever shows a
-dismissable prompt, never starts recording by itself, so a false positive
-costs a tap, not a surprise recording.
+Cada gravação vira uma pasta em `~/Recordings/`, nomeada só com a data e
+hora (ex: `2026-08-01 21h50`). Dentro dela, dois arquivos que você pode
+abrir direto:
 
-First poll triggers a one-time **"sabia wants to control Google Chrome"**
-Automation permission prompt (System Settings → Privacy & Security →
-Automation) — required for AppleScript to read tab URLs at all; without it,
-detection silently does nothing (no crash, just no prompts).
+| Arquivo | O que é |
+|---|---|
+| `audio.m4a` | a gravação da reunião, num formato que toca em qualquer player |
+| `transcript.md` | a transcrição em texto, com hora e quem falou cada trecho |
 
-A recording started manually (menu, Dock, or ⌃⌥⌘R) is never auto-stopped by
-a Chrome tab closing — only a recording started *from the meeting prompt*
-is tied to that meeting's lifecycle.
+(Existem outros arquivos internos na pasta, começando com ponto — o
+Finder já esconde eles por padrão. São só apoio técnico do app, não
+precisa mexer.)
 
-To build the `.app` yourself instead of downloading a release:
+---
+
+## Detalhes técnicos
+
+*A partir daqui é conteúdo para quem quiser entender ou mexer no código —
+não é necessário pra usar o app.*
+
+Fork de [digimata/quill](https://github.com/digimata/quill), trocando o
+engine de transcrição padrão para **Whisper (WhisperKit)** — o engine
+original do quill (Parakeet) só transcreve inglês.
+
+**Requer:** macOS 15+ (Core Audio process taps para áudio do sistema — sem
+driver virtual, sem kernel extension). Apple Silicon recomendado.
+
+### Por que existe um ícone permanente no Dock
+
+O quill original não tem ícone no Dock, só na barra de menu. O sabia
+mantém um ícone fixo no Dock por um motivo concreto, descoberto na prática:
+o macOS pode descartar silenciosamente o ícone de terceiros na barra de
+menu quando ela está cheia — sem aviso, sem seta de "mais ícones" — e
+também sobrepõe seu próprio selo de microfone em uso no ícone de apps que
+gravam áudio, o que pode parar de repassar cliques pro app por baixo. Os
+dois foram observados ao vivo durante o desenvolvimento. O ícone do Dock
+não sofre nenhum dos dois problemas.
+
+### ⌃⌥⌘R — iniciar/parar de qualquer lugar
+
+O atalho **⌃⌥⌘R** funciona independente do que está visível na tela, com
+notificação confirmando início/fim. Útil quando a barra de menu e o Dock
+estão temporariamente fora de alcance (ex: um app em tela cheia).
+
+Na primeira vez, pede permissão de **Input Monitoring** (System Settings →
+Privacy & Security → Input Monitoring) — necessária pra qualquer atalho
+de teclado global.
+
+### Detecção automática de reunião (Google Meet / Teams no Chrome)
+
+O sabia varre as abas abertas do Chrome a cada 5 segundos procurando uma
+URL de reunião do Google Meet ou Microsoft Teams. Ao encontrar, mostra um
+aviso no canto superior direito — **Gravar** / **Ignorar**. Se aceitar, a
+gravação para sozinha quando aquela aba específica fecha ou muda de URL.
+
+Não existe API pública do macOS para "há uma reunião em andamento", então
+isso é uma heurística por padrão de URL — pode disparar na tela de espera
+antes de entrar na call, não só numa call já em andamento. Por isso a
+detecção só mostra um aviso dispensável, nunca grava sozinha sem
+confirmação.
+
+Na primeira detecção, pede permissão de automação **"sabia quer controlar
+o Google Chrome"** (System Settings → Privacy & Security → Automation) —
+sem ela, a detecção simplesmente não funciona (sem erro, sem travar).
+
+Uma gravação iniciada manualmente (menu, Dock, ou ⌃⌥⌘R) nunca é parada
+automaticamente por uma aba do Chrome fechando — só uma gravação iniciada
+*pelo aviso de reunião* fica vinculada ao ciclo de vida daquela reunião.
+
+### Build a partir do código
 
 ```sh
 cd sabia
-./scripts/build-app.sh        # -> .build/Sabia.app, .build/sabia-<version>-macos.zip
+./scripts/build-app.sh        # -> .build/Sabia.app, .build/sabia-<versão>-macos.zip
 ```
 
-## Install — CLI binary (for terminal / LaunchAgent use)
+Ou, para instalar como binário de linha de comando / LaunchAgent:
 
 ```sh
 cd sabia
 swift build -c release
 sudo cp .build/release/sabia /usr/local/bin/sabia
-sabia install --launch-at-login   # optional — runs in the background on login
+sabia install --launch-at-login   # opcional — roda em segundo plano no login
 ```
 
-## How to use
+### Estrutura completa da pasta de sessão
 
-1. **Run it** (`sabia` in a terminal, the LaunchAgent, or `Sabia.app`).
-2. **Start recording** via the menu bar icon, the Dock icon (left- or
-   right-click), the notes window's record button, ⌃⌥⌘R, or — in Chrome —
-   just accept the automatic meeting prompt (see below). First use prompts
-   for microphone and System Audio Recording permissions. While recording,
-   the Dock icon badges and the notes window shows a live elapsed counter.
-3. **Stop** the same way. Transcription starts automatically; a notification
-   fires when it's ready, and the session appears in the notes window.
+Além de `audio.m4a` e `transcript.md` (os dois arquivos visíveis),
+cada pasta guarda arquivos ocultos (prefixo `.`) usados internamente:
+`.mic.caf`/`.system.caf` (as duas trilhas brutas, mantidas para permitir
+re-transcrição), `.meta.json` (timestamps/offsets), `.transcript.json`
+(a transcrição em formato de máquina), `.transcribe.log`. Duas trilhas
+brutas de propósito: modelos de fala funcionam melhor com áudio de fonte
+única, e mic-vs-sistema já dá diarização gratuita — `me` vs `them` sem
+nenhum modelo de identificação de locutor (ver Gotchas abaixo pros limites
+disso). CAF de propósito nas trilhas brutas: ao contrário de m4a, não
+precisa de finalização — se o processo morrer no meio da reunião, tudo já
+escrito continua legível; `audio.m4a` é gerado depois, uma vez, durante a
+transcrição (ver `AudioMixer.swift`).
 
-Each session lands in `~/Recordings/`, in a folder named for when it
-happened (e.g. `2026-08-01 21h50`) and nothing else — no meeting name, no
-generated ID. Inside, only two files are meant to be opened directly:
+### Transcrição
 
-| File | Contents |
-|---|---|
-| `audio.m4a` | both tracks mixed into one ordinary, playable file |
-| `transcript.md` | the transcript, speaker-tagged and timestamped |
+Engine padrão é **Whisper large-v3-turbo** via
+[WhisperKit](https://github.com/argmaxinc/argmax-oss-swift), multilíngue,
+decodificando em português por padrão (`transcription.language`, padrão
+`"pt"`). Modelos (~1.5 GB) baixam uma vez na primeira transcrição;
+`sabia doctor` avisa se já estão em cache.
 
-Everything else in the folder is dot-prefixed (hidden in Finder by
-default) — internal bookkeeping the app needs but a user doesn't:
-`.mic.caf`/`.system.caf` (the raw per-track recordings, kept for
-re-transcription), `.meta.json` (timestamps/offsets), `.transcript.json`
-(the machine-readable transcript), `.transcribe.log`. Two raw tracks on
-purpose under the hood: speech models do better on clean single-source
-audio, and mic-vs-system is free two-party diarization — `me` vs `them`
-with no speaker-identification model (see the Gotchas section below for
-where this breaks down). CAF on purpose for the raw tracks: unlike m4a, it
-needs no finalization pass — if the process dies mid-meeting, everything
-already written is still readable; `audio.m4a` is produced afterward, once,
-during transcription (see AudioMixer).
+**Parakeet TDT 0.6B v2** (só inglês, via
+[FluidAudio](https://github.com/FluidInference/FluidAudio), ~600 MB, mais
+rápido) fica disponível como alternativa opcional — `"engine": "parakeet"`
+no config.
 
-## Transcription
+Cada trilha é transcrita separadamente, ajustada pelo offset de início, e
+combinada por timestamp. Fila serial — dá pra gravar de novo enquanto a
+última ainda transcreve. Jobs pendentes retomam ao reabrir o app.
 
-Built in, on-device, automatic. The default engine is **Whisper large-v3-turbo**
-via [WhisperKit](https://github.com/argmaxinc/argmax-oss-swift)'s Core ML port
-— multilingual, decoding in Portuguese by default (`transcription.language`,
-default `"pt"`). Models (~1.5 GB) download once on first transcription;
-`sabia doctor` reminds you to warm the cache before an important meeting.
+O engine fica atrás de um protocolo pequeno (`TranscriptionEngine`), então
+adicionar um terceiro é um arquivo independente — ver `WhisperEngine.swift`
+/ `ParakeetEngine.swift`.
 
-**Parakeet TDT 0.6B v2** (English-only, via
-[FluidAudio](https://github.com/FluidInference/FluidAudio), ~600 MB, faster —
-roughly 20 seconds per hour of audio) is kept as an opt-in alternative for
-English-only meetings — set `"engine": "parakeet"` in config.
+#### Precisão vs. transcrição em nuvem (ex: coconote)
 
-Each track is transcribed separately, shifted by its start offset so both
-share one clock, and merged by timestamp. Jobs run in a serial queue — you can
-start a new recording while the last one transcribes. Unfinished jobs resume
-on next launch (the filesystem is the queue: a session with `meta.json` but no
-`transcript.json` is pending). Failures append to the session's
-`transcribe.log` and never block later jobs.
+Whisper local faz uma transcrição **sólida** em português pra áudio limpo
+e de fala única — mas é realista esperar mais erros em nomes próprios,
+jargão e fala ruidosa/com sotaque do que um serviço em nuvem rodando um
+modelo maior e/ou passando por um LLM depois. Em troca: **custo zero por
+reunião** e **zero áudio saindo da máquina**.
 
-The engine sits behind a small protocol (`TranscriptionEngine`), so adding a
-third engine is a self-contained file — see `WhisperEngine.swift` /
-`ParakeetEngine.swift`.
+### Config
 
-### Accuracy vs. cloud transcription (e.g. coconote)
-
-Whisper large-v3-turbo running locally does **solid** Portuguese transcription
-for clear, single-speaker audio — but it's realistic to expect more mistakes
-on proper nouns, jargon, and noisy/accented speech than a cloud service that
-runs a bigger model and/or LLM post-processing on top. What you get in
-exchange: **zero marginal cost per meeting** (no subscription, no per-minute
-API billing) and **zero audio leaving the machine**. If accuracy on a specific
-kind of meeting turns out to be the bottleneck, the natural next step is
-post-processing `transcript.json` through an LLM pass (cleanup, punctuation,
-custom vocabulary) — the engine boundary already isolates that from capture.
-
-## Config
-
-Optional, at `~/.config/sabia/config.json`:
+Opcional, em `~/.config/sabia/config.json`:
 
 ```json
 {
   "recordings_dir": "~/Recordings",
   "transcription": { "enabled": true, "engine": "whisper", "language": "pt" },
-  "on_stop": "my-hook"
+  "on_stop": "meu-hook"
 }
 ```
 
-- `recordings_dir` — where sessions land. Resolution order: `--out` flag >
-  config > `~/Recordings`.
-- `transcription.enabled` — set `false` to just record.
-- `transcription.engine` — `"whisper"` (default, multilingual) or `"parakeet"`
-  (English-only, faster/smaller).
-- `transcription.language` — ISO-639-1 code passed to Whisper's decoder.
-  Default `"pt"`. Set `"auto"` to let Whisper detect the language per segment
-  (useful for mixed-language meetings). Ignored by `parakeet`.
-- `mic_voice_processing` — Apple's echo cancellation on the mic (default off).
-  Set `true` when recording meetings through the speakers, so playback doesn't
-  bleed into the mic track and get transcribed twice as "me". The trade: while
-  the voice unit is live, macOS ducks other playback slightly (`.min` ducking
-  is configured, but it can't be zeroed). On headphones there's no echo to
-  cancel, so raw capture is the better default.
-- `on_stop` — shell command spawned with the session directory as its
-  argument, **after the transcript is written** (or right after recording if
-  transcription is disabled). Wire it to whatever comes next: summarization,
-  filing, indexing.
+- `recordings_dir` — onde as sessões ficam. Ordem: flag `--out` > config >
+  `~/Recordings`.
+- `transcription.enabled` — `false` pra só gravar, sem transcrever.
+- `transcription.engine` — `"whisper"` (padrão, multilíngue) ou
+  `"parakeet"` (só inglês, mais rápido/leve).
+- `transcription.language` — código ISO-639-1 pro decoder do Whisper.
+  Padrão `"pt"`. `"auto"` deixa o Whisper detectar por segmento (útil pra
+  reuniões multi-idioma). Ignorado pelo `parakeet`.
+- `mic_voice_processing` — cancelamento de eco da Apple no microfone
+  (padrão desligado). Ative se gravar reuniões pela caixa de som (não
+  fone), pra evitar que o áudio que sai da caixa volte a entrar no
+  microfone e seja transcrito duas vezes.
+- `on_stop` — comando de shell disparado com a pasta da sessão como
+  argumento, depois que a transcrição for escrita.
 
-## CLI
+### CLI
 
 ```sh
-sabia                        # run the menu-bar daemon (^C to quit)
-sabia run --out <dir>        # custom recordings root (default ~/Recordings)
-sabia doctor                 # check permissions, recordings folder, models
+sabia                        # roda o daemon (^C pra sair)
+sabia run --out <pasta>      # raiz de gravações customizada
+sabia doctor                 # checa permissões, pasta, modelos
 sabia install --launch-at-login
 sabia install --uninstall
 ```
 
-## Stack
+### Stack
 
-- **Swift** — single SPM executable target
-- **Core Audio process tap** (`AudioHardwareCreateProcessTap`, macOS 14.2+) —
-  system audio capture via a private aggregate device
-- **AVAudioEngine** — mic capture
-- **AVAudioFile** — streaming AAC encode into CAF
-- **AVFoundation composition/export** — mixing the two raw tracks down into
-  `audio.m4a` (see `AudioMixer.swift`)
-- **WhisperKit / Whisper large-v3-turbo** — on-device Core ML transcription (default, multilingual)
-- **FluidAudio / Parakeet** — on-device Core ML transcription (opt-in, English-only)
-- **NSStatusItem** — the menu bar icon
-- **SwiftUI (`NSHostingView`) + AppKit** — the notes window (session list +
-  transcript reader + record button), hosted in a plain `NSWindow`
-- **AppleScript / osascript** — polling Chrome's tabs for meeting URLs
-  (`MeetingDetector.swift`); also how transcript-ready notifications are shown
+- **Swift** — target executável único via SPM
+- **Core Audio process tap** (`AudioHardwareCreateProcessTap`, macOS 14.2+)
+  — captura de áudio do sistema via aggregate device privado
+- **AVAudioEngine** — captura do microfone
+- **AVAudioFile** — encode AAC em streaming pra CAF
+- **AVFoundation composition/export** — mixagem das duas trilhas em
+  `audio.m4a` (`AudioMixer.swift`)
+- **WhisperKit / Whisper large-v3-turbo** — transcrição on-device (padrão)
+- **FluidAudio / Parakeet** — transcrição on-device (opcional, só inglês)
+- **NSStatusItem** — ícone da barra de menu
+- **SwiftUI (`NSHostingView`) + AppKit** — a janela de notas
+- **AppleScript / osascript** — leitura das abas do Chrome
+  (`MeetingDetector.swift`)
+- **UserNotifications** — notificações do sistema
 
-## Gotchas
+### Gotchas
 
-- A global tap records *everything* the Mac plays — notification dings,
-  music, all of it. Don't play Spotify during meetings (or ask for a
-  per-process picker if it bothers you).
-- If recordings come out silent, check System Settings → Privacy & Security →
-  Screen & System Audio Recording.
-- **Diarization breaks down without headphones on the "them" side.** The
-  mic/system split only gives clean two-party separation when your mic
-  *only* hears you — on speakers (not headphones), audio playing out loud
-  bleeds acoustically back into the mic, so both tracks capture nearly the
-  same thing and get transcribed twice, once tagged "me" and once "them".
-  Real two-person calls over headphones aren't affected; testing sabia by
-  playing a video/song out loud instead of an actual call will show this.
-  Fix: use headphones, or set `mic_voice_processing: true` in config.
-- The binary embeds its Info.plist (`__TEXT,__info_plist`) so TCC can
-  attribute permissions to sabia itself when running as a LaunchAgent.
+- Um tap global grava *tudo* que o Mac toca — som de notificação, música,
+  tudo. Evite tocar música durante reuniões.
+- Se as gravações saírem mudas, confira System Settings → Privacy &
+  Security → Screen & System Audio Recording.
+- **Diarização quebra sem fone de ouvido do lado de "quem fala".** A
+  separação mic/sistema só funciona limpa quando seu microfone escuta *só*
+  você — na caixa de som (não fone), o áudio tocado vaza acusticamente de
+  volta pro mic, e as duas trilhas capturam quase a mesma coisa,
+  duplicando o texto uma vez como "me" e outra como "them". Chamadas reais
+  de duas pessoas por fone não sofrem disso; testar o sabia tocando um
+  vídeo/música na caixa em vez de uma call de verdade mostra esse efeito.
+  Correção: use fone, ou ative `mic_voice_processing: true` no config.
+- O binário embute seu Info.plist (`__TEXT,__info_plist`) pra que o TCC
+  atribua permissões ao sabia mesmo rodando como LaunchAgent sem bundle.
 
-## Relationship to upstream
+### Relação com o upstream
 
-This is a fork, not a drop-in replacement — the binary, bundle identifier
-(`com.gabrieImoreira.sabia`), config path, and default engine all diverge from
-quill so the two can coexist on the same machine. Recording/capture code is
-unchanged from upstream; the divergence is entirely in the transcription
-layer and naming. MIT license, same as upstream (see `LICENSE`).
+É um fork, não substituto direto — binário, identificador de bundle
+(`com.gabrieImoreira.sabia`), caminho de config e engine padrão divergem
+do quill pra que os dois coexistam na mesma máquina. Licença MIT, igual ao
+upstream (ver `LICENSE`).
