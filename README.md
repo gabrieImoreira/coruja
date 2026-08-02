@@ -26,14 +26,23 @@ com marcação de quem falou o quê.
    baixe o arquivo `sabia-<versão>-macos.zip` mais recente.
 2. Descompacte e arraste o `Sabia.app` para a pasta **Aplicativos**.
 3. **Só na primeira vez**: como este app não passou pelo processo pago de
-   certificação da Apple, o macOS vai bloquear um duplo-clique normal com
-   um aviso de "desenvolvedor não identificado". Para abrir:
-   - Clique **com o botão direito** em cima do `Sabia.app`
-   - Escolha **Abrir**
-   - Na janela que aparecer, clique em **Abrir** de novo
+   certificação da Apple, o macOS vai bloquear a abertura com um aviso de
+   "não é possível verificar" / "mover para o lixo". Para liberar, escolha
+   **uma** destas opções:
 
-   Depois disso, o app abre normalmente com duplo-clique, como qualquer
-   outro.
+   **Sem usar Terminal:** tente abrir o app (vai bloquear) → abra
+   **Configurações do Sistema → Privacidade e Segurança** → role até a
+   seção de segurança, onde aparece um aviso sobre o Sabia ter sido
+   bloqueado → clique em **Abrir Mesmo Assim** → confirme com sua senha
+   ou Touch ID.
+
+   **Usando Terminal** (mais rápido): abra o app Terminal e cole:
+   ```sh
+   xattr -cr /Applications/Sabia.app
+   ```
+
+   Depois de qualquer uma das duas, o app abre normalmente com
+   duplo-clique, como qualquer outro.
 4. Na primeira gravação, o macOS vai pedir permissão de **Microfone** e de
    **Gravação de Áudio do Sistema** — aceite as duas, senão a gravação sai
    muda.
