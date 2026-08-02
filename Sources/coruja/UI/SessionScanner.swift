@@ -3,12 +3,40 @@ import Foundation
 /// One row in the notes window's session list.
 struct SessionEntry: Identifiable, Hashable {
     let id: URL // the session folder
+    let date: Date?
     let displayName: String
     let hasTranscript: Bool
+    let durationSeconds: Int?
 
     var transcriptURL: URL { id.appendingPathComponent(TranscriptionCoordinator.transcriptMDFileName) }
     var transcriptJSONURL: URL { id.appendingPathComponent(TranscriptionCoordinator.transcriptJSONFileName) }
     var audioURL: URL { id.appendingPathComponent(TranscriptionCoordinator.audioFileName) }
+
+    /// "Hoje", "Ontem", or a formatted date — the sidebar's section header.
+    var dayGroupLabel: String {
+        guard let date else { return "" }
+        let cal = Calendar.current
+        if cal.isDateInToday(date) { return "Hoje" }
+        if cal.isDateInYesterday(date) { return "Ontem" }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "pt_BR")
+        f.dateFormat = "d 'de' MMMM"
+        return f.string(from: date)
+    }
+
+    /// "14:32" — paired with dayGroupLabel to make a row title like "Hoje, 14:32".
+    var timeLabel: String {
+        guard let date else { return displayName }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "pt_BR")
+        f.dateFormat = "HH:mm"
+        return f.string(from: date)
+    }
+
+    var durationLabel: String? {
+        guard let durationSeconds else { return nil }
+        return String(format: "%d:%02d", durationSeconds / 60, durationSeconds % 60)
+    }
 }
 
 /// Scans the recordings root and turns each session's timestamp-only folder
@@ -41,17 +69,31 @@ enum SessionScanner {
             .sorted { $0.lastPathComponent > $1.lastPathComponent } // newest first
             .map { dir in
                 let name = dir.lastPathComponent
-                let display = parseDate(from: name).map(displayFormatter.string) ?? name
+                let date = parseDate(from: name)
+                let display = date.map(displayFormatter.string) ?? name
                 let hasTranscript = fm.fileExists(
                     atPath: dir.appendingPathComponent(TranscriptionCoordinator.transcriptMDFileName).path
                 )
-                return SessionEntry(id: dir, displayName: display, hasTranscript: hasTranscript)
+                let duration = readDurationSeconds(dir: dir)
+                return SessionEntry(
+                    id: dir, date: date, displayName: display,
+                    hasTranscript: hasTranscript, durationSeconds: duration
+                )
             }
     }
 
     static func transcriptText(for entry: SessionEntry) -> String {
         (try? String(contentsOf: entry.transcriptURL, encoding: .utf8))
             ?? "Transcrição ainda não disponível (pendente ou em processamento)."
+    }
+
+    private static func readDurationSeconds(dir: URL) -> Int? {
+        let url = dir.appendingPathComponent(RecordingSession.metaFileName)
+        guard
+            let data = try? Data(contentsOf: url),
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+        return json["duration_seconds"] as? Int
     }
 
     private static func parseDate(from folderName: String) -> Date? {

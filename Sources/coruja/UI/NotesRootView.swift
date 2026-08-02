@@ -6,30 +6,40 @@ import SwiftUI
 /// over and a Dock icon that only appeared (and only helped) while
 /// recording. No summarization (unlike coconote) — just the recordings and
 /// their transcripts, browsable.
+///
+/// Visual design follows the "Janela Principal" handoff: a document-style
+/// transcript (serif body, no chat bubbles), sessions grouped by day, a
+/// monochrome palette, and a light/dark toggle independent of the system.
 struct NotesRootView: View {
     let root: URL
     @ObservedObject var status: RecordingStatus
     let onToggleRecording: () -> Void
+
+    @AppStorage("corujaDarkMode") private var isDarkMode = false
 
     @State private var sessions: [SessionEntry] = []
     @State private var selection: URL?
     @State private var transcript: TranscriptDTO?
     @State private var transcriptFallback: String = ""
     @State private var copied = false
-    @State private var pendingDelete: SessionEntry?
+    @State private var recordDotPulsed = false
     @StateObject private var player = AudioPlayerModel()
+
+    private var theme: Theme { Theme(isDark: isDarkMode) }
 
     var body: some View {
         VStack(spacing: 0) {
             recordingBar
-            Divider()
-            NavigationSplitView {
+            Divider().overlay(theme.border)
+            HStack(spacing: 0) {
                 sidebar
-            } detail: {
+                Divider().overlay(theme.border)
                 detail
             }
         }
-        .frame(minWidth: 760, minHeight: 500)
+        .frame(minWidth: 780, minHeight: 520)
+        .background(theme.windowBg)
+        .preferredColorScheme(isDarkMode ? .dark : .light)
         .onAppear(perform: reload)
         .onChange(of: status.isRecording) { wasRecording, isRecording in
             // A session folder only appears once stop() writes .meta.json —
@@ -54,37 +64,94 @@ struct NotesRootView: View {
             Button("Excluir", role: .destructive) { delete(session) }
             Button("Cancelar", role: .cancel) {}
         } message: { session in
-            Text("\(session.displayName) será apagada permanentemente — áudio e transcrição. Essa ação não pode ser desfeita.")
+            Text("\(session.dayGroupLabel), \(session.timeLabel) será apagada permanentemente — áudio e transcrição. Essa ação não pode ser desfeita.")
         }
     }
 
-    /// A single, clearly-labeled bar rather than icon-only toolbar buttons —
-    /// icon-only controls in the window toolbar read as unclear/cryptic in
-    /// practice (confirmed live). Every action here has visible text.
+    @State private var pendingDelete: SessionEntry?
+
+    // MARK: - Recording bar
+
     private var recordingBar: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 16) {
             Image(nsImage: NSImage(named: NSImage.applicationIconName) ?? NSImage())
                 .resizable()
-                .frame(width: 26, height: 26)
+                .frame(width: 30, height: 30)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(Color.black.opacity(0.1), lineWidth: 1)
+                )
 
             Button(action: onToggleRecording) {
-                Label(
-                    status.isRecording ? "Parar gravação" : "Iniciar gravação",
-                    systemImage: status.isRecording ? "stop.fill" : "record.circle.fill"
+                HStack(spacing: 9) {
+                    Circle()
+                        .fill(status.isRecording ? Color.white : theme.recordIdleColor)
+                        .frame(width: 8, height: 8)
+                        .opacity(status.isRecording && recordDotPulsed ? 0.35 : 1)
+                    Text(status.isRecording ? "Parar gravação" : "Iniciar gravação")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .foregroundStyle(status.isRecording ? .white : theme.recordIdleColor)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule().fill(status.isRecording ? Theme.recordRed : theme.recordIdleBg)
                 )
             }
-            .buttonStyle(.borderedProminent)
-            .tint(status.isRecording ? .red : .accentColor)
+            .buttonStyle(.plain)
+            .onChange(of: status.isRecording) { _, isRecording in
+                if isRecording {
+                    withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
+                        recordDotPulsed = true
+                    }
+                } else {
+                    recordDotPulsed = false
+                }
+            }
 
             if status.isRecording {
                 Text(status.elapsed ?? "0:00")
-                    .monospacedDigit()
-                    .foregroundStyle(.red)
-                    .font(.callout.weight(.medium))
+                    .font(.system(size: 13, weight: .semibold).monospaced())
+                    .foregroundStyle(Theme.recordRed)
             }
+
             Spacer()
+
+            Text("~/Recordings")
+                .font(.system(size: 12))
+                .foregroundStyle(theme.pathColor)
+
+            themeToggle
         }
-        .padding(14)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 14)
+        .background(theme.windowBg)
+    }
+
+    private var themeToggle: some View {
+        HStack(spacing: 8) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) { isDarkMode.toggle() }
+            } label: {
+                ZStack(alignment: isDarkMode ? .trailing : .leading) {
+                    Capsule()
+                        .fill(isDarkMode ? Color(hex: 0xF2F2F0) : Color.black.opacity(0.2))
+                    Circle()
+                        .fill(isDarkMode ? Color(hex: 0x1A1A1A) : .white)
+                        .frame(width: 16, height: 16)
+                        .shadow(color: .black.opacity(0.3), radius: 1, y: 1)
+                        .padding(2)
+                }
+                .frame(width: 34, height: 20)
+            }
+            .buttonStyle(.plain)
+
+            Text(isDarkMode ? "Escuro" : "Claro")
+                .font(.system(size: 11.5))
+                .foregroundStyle(theme.pathColor)
+                .frame(width: 42, alignment: .leading)
+        }
     }
 
     private var currentSession: SessionEntry? {
@@ -93,27 +160,71 @@ struct NotesRootView: View {
 
     // MARK: - Sidebar
 
+    private var groupedSessions: [(label: String, items: [SessionEntry])] {
+        var order: [String] = []
+        var buckets: [String: [SessionEntry]] = [:]
+        for session in sessions {
+            let label = session.dayGroupLabel
+            if buckets[label] == nil { order.append(label) }
+            buckets[label, default: []].append(session)
+        }
+        return order.map { (label: $0, items: buckets[$0] ?? []) }
+    }
+
     private var sidebar: some View {
-        List(sessions, selection: $selection) { session in
-            VStack(alignment: .leading, spacing: 3) {
-                Text(session.displayName)
-                    .font(.system(size: 13, weight: .medium))
-                    .lineLimit(1)
-                HStack(spacing: 5) {
-                    Circle()
-                        .fill(session.hasTranscript ? Color.accentColor : Color.orange)
-                        .frame(width: 5, height: 5)
-                    Text(session.hasTranscript ? "Transcrito" : "Processando…")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0, pinnedViews: []) {
+                ForEach(groupedSessions, id: \.label) { group in
+                    Text(group.label.uppercased())
+                        .font(.system(size: 10.5, weight: .bold))
+                        .tracking(0.8)
+                        .foregroundStyle(theme.groupLabelColor)
+                        .padding(.horizontal, 18)
+                        .padding(.top, 14)
+                        .padding(.bottom, 6)
+                    ForEach(group.items) { session in
+                        sidebarRow(session)
+                    }
                 }
             }
-            .padding(.vertical, 3)
-            .tag(session.id)
+            .padding(.vertical, 10)
         }
-        .listStyle(.sidebar)
-        .navigationSplitViewColumnWidth(min: 200, ideal: 230)
-        .navigationTitle("coruja")
+        .frame(width: 250)
+        .background(theme.sidebarBg)
+    }
+
+    private func sidebarRow(_ session: SessionEntry) -> some View {
+        let selected = session.id == selection
+        return VStack(alignment: .leading, spacing: 3) {
+            Text("\(session.dayGroupLabel), \(session.timeLabel)")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(theme.rowTitleColor)
+                .lineLimit(1)
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(session.hasTranscript ? theme.dotOn : theme.dotOff)
+                    .frame(width: 5, height: 5)
+                Text(session.hasTranscript ? "Transcrito" : "Processando…")
+                    .font(.system(size: 11))
+                    .foregroundStyle(theme.rowStatusColor)
+                Spacer()
+                if let duration = session.durationLabel {
+                    Text(duration)
+                        .font(.system(size: 10.5).monospacedDigit())
+                        .foregroundStyle(theme.rowDurationColor)
+                }
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(selected ? theme.rowSelectedBg : .clear)
+        )
+        .padding(.horizontal, 8)
+        .contentShape(Rectangle())
+        .onTapGesture { selection = session.id }
     }
 
     // MARK: - Detail
@@ -128,20 +239,22 @@ struct NotesRootView: View {
 
                             if FileManager.default.fileExists(atPath: session.audioURL.path) {
                                 playerCard
-                                    .padding(.horizontal, 28)
-                                    .padding(.top, 18)
+                                    .padding(.top, 4)
                             }
 
                             transcriptBody
-                                .padding(.horizontal, 28)
-                                .padding(.top, 24)
+                                .padding(.top, 26)
                                 .padding(.bottom, 24)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(maxWidth: 640, alignment: .leading)
+                        .padding(.horizontal, 28)
+                        .padding(.top, 32)
+                        .padding(.bottom, 40)
+                        .frame(maxWidth: .infinity)
                     }
-                    .background(.background)
+                    .background(theme.windowBg)
 
-                    Divider()
+                    Divider().overlay(theme.border)
                     actionBar(for: session)
                 }
                 .onChange(of: selection, initial: true) { _, _ in loadContent(for: session) }
@@ -149,56 +262,33 @@ struct NotesRootView: View {
                 emptyState
             }
         }
-    }
-
-    private func actionBar(for session: SessionEntry) -> some View {
-        HStack(spacing: 10) {
-            Button {
-                copyTranscript()
-            } label: {
-                Label(copied ? "Copiado" : "Copiar transcrição", systemImage: copied ? "checkmark" : "doc.on.doc")
-            }
-
-            Button {
-                NSWorkspace.shared.open(session.id)
-            } label: {
-                Label("Abrir pasta", systemImage: "folder")
-            }
-
-            Spacer()
-
-            Button(role: .destructive) {
-                pendingDelete = session
-            } label: {
-                Label("Excluir gravação", systemImage: "trash")
-            }
-        }
-        .padding(14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(theme.windowBg)
     }
 
     private func header(for session: SessionEntry) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(session.displayName)
-                .font(.system(size: 28, weight: .semibold, design: .rounded))
+        VStack(alignment: .leading, spacing: 5) {
+            Text("\(session.dayGroupLabel), \(session.timeLabel)")
+                .font(.system(size: 25, weight: .semibold))
+                .foregroundStyle(theme.headerTitleColor)
                 .textSelection(.enabled)
             if let transcript {
                 Text("\(transcript.segments.count) trechos · \(transcript.model)")
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(.tertiary)
+                    .font(.system(size: 12))
+                    .foregroundStyle(theme.metaColor)
             }
         }
-        .padding(.horizontal, 28)
-        .padding(.top, 28)
+        .padding(.bottom, 22)
     }
 
     private var playerCard: some View {
         HStack(spacing: 16) {
             Button(action: player.togglePlayPause) {
                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(theme.playIconColor)
                     .frame(width: 34, height: 34)
-                    .background(Circle().fill(Color.accentColor))
+                    .background(Circle().fill(theme.playButtonBg))
             }
             .buttonStyle(.plain)
 
@@ -207,61 +297,62 @@ struct NotesRootView: View {
                     value: Binding(get: { player.currentTime }, set: { player.seek(to: $0) }),
                     in: 0...max(player.duration, 0.1)
                 )
+                .tint(theme.playButtonBg)
                 HStack {
                     Text(Self.formatTime(player.currentTime))
                     Spacer()
                     Text(Self.formatTime(player.duration))
                 }
                 .font(.system(size: 11).monospacedDigit())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(theme.timeColor)
             }
         }
-        .padding(14)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(theme.playerCardBg, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(.quaternary, lineWidth: 1)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(theme.border, lineWidth: 1)
         )
+        .padding(.bottom, 26)
     }
 
     private var transcriptBody: some View {
         Group {
             if let transcript, !transcript.segments.isEmpty {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 24) {
                     ForEach(transcript.segments) { segment in
-                        transcriptRow(segment)
+                        transcriptParagraph(segment)
                     }
                 }
             } else {
                 Text(transcriptFallback.isEmpty ? "Transcrição ainda não disponível." : transcriptFallback)
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 13.5))
+                    .italic()
+                    .foregroundStyle(theme.fallbackColor)
             }
         }
     }
 
-    private func transcriptRow(_ segment: TranscriptDTO.Segment) -> some View {
+    private func transcriptParagraph(_ segment: TranscriptDTO.Segment) -> some View {
         let isMe = segment.speaker == "me"
-        return HStack(alignment: .top, spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(isMe ? Color.accentColor.opacity(0.16) : Color.secondary.opacity(0.14))
-                Text(isMe ? "Eu" : "Outro")
-                    .font(.system(size: 10.5, weight: .semibold))
-                    .foregroundStyle(isMe ? Color.accentColor : .secondary)
-            }
-            .frame(width: 30, height: 30)
-
-            VStack(alignment: .leading, spacing: 3) {
+        return VStack(alignment: .leading, spacing: 5) {
+            HStack {
+                Text(isMe ? "EU" : "OUTRO")
+                    .font(.system(size: 11, weight: .bold))
+                    .tracking(0.6)
+                    .foregroundStyle(isMe ? theme.speakerMe : theme.speakerOther)
+                Spacer()
                 Text(Self.formatMs(segment.start_ms))
                     .font(.system(size: 11).monospacedDigit())
-                    .foregroundStyle(.tertiary)
-                Text(segment.text)
-                    .font(.system(size: 14))
-                    .foregroundStyle(.primary)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(theme.timestampColor)
             }
+            Text(segment.text)
+                .font(.system(size: 16.5, design: .serif))
+                .lineSpacing(6)
+                .foregroundStyle(theme.bodyColor)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -269,13 +360,53 @@ struct NotesRootView: View {
         VStack(spacing: 8) {
             Image(systemName: "waveform")
                 .font(.system(size: 32))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(theme.metaColor)
             Text(sessions.isEmpty ? "Nenhuma gravação ainda" : "Selecione uma gravação")
                 .font(.system(size: 13))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(theme.metaColor)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.background)
+        .background(theme.windowBg)
+    }
+
+    private func actionBar(for session: SessionEntry) -> some View {
+        HStack(spacing: 10) {
+            actionButton(copied ? "Copiado" : "Copiar transcrição", icon: copied ? "checkmark" : "doc.on.doc") {
+                copyTranscript()
+            }
+            actionButton("Abrir pasta", icon: "folder") {
+                NSWorkspace.shared.open(session.id)
+            }
+
+            Spacer()
+
+            Button("Excluir gravação") { pendingDelete = session }
+                .buttonStyle(.plain)
+                .font(.system(size: 12.5, weight: .medium))
+                .foregroundStyle(theme.deleteColor)
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 14)
+        .background(theme.windowBg)
+    }
+
+    private func actionButton(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 7) {
+                Image(systemName: icon)
+                Text(title)
+            }
+            .font(.system(size: 12.5, weight: .medium))
+            .foregroundStyle(theme.actionBtnColor)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(theme.actionBtnBg, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(theme.border, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Actions
@@ -305,11 +436,6 @@ struct NotesRootView: View {
         }
     }
 
-    private func reload() {
-        sessions = SessionScanner.scan(root: root)
-        if selection == nil { selection = sessions.first?.id }
-    }
-
     private func delete(_ session: SessionEntry) {
         if selection == session.id {
             player.stop()
@@ -318,6 +444,11 @@ struct NotesRootView: View {
         try? FileManager.default.removeItem(at: session.id)
         pendingDelete = nil
         reload()
+    }
+
+    private func reload() {
+        sessions = SessionScanner.scan(root: root)
+        if selection == nil { selection = sessions.first?.id }
     }
 
     private static func formatTime(_ seconds: TimeInterval) -> String {
