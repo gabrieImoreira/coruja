@@ -36,6 +36,16 @@ struct NotesRootView: View {
             // refresh the list right when recording flips off.
             if wasRecording, !isRecording { reload() }
         }
+        .task {
+            // Transcription finishes well after recording stops (minutes,
+            // not instant) — poll while the window is open so "Processando…"
+            // flips to "Transcrito" on its own, no manual refresh needed.
+            // Cancels automatically when the window closes.
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(4))
+                reload()
+            }
+        }
         .confirmationDialog(
             "Excluir esta gravação?",
             isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
