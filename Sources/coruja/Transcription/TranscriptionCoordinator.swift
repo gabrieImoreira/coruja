@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 
 /// Post-recording pipeline: a serial queue of session folders to transcribe.
@@ -132,6 +133,19 @@ actor TranscriptionCoordinator {
             } catch {
                 log(dir, "skipping \(track.file): \(error)")
                 continue
+            }
+            // Whisper's chunking can stop short of the true end of a track
+            // on quiet/unclear audio without raising any error (observed
+            // live: ~25s of audible speech silently dropped from a ~6.5min
+            // recording). Flag it loudly here since nothing else will.
+            if let file = try? AVAudioFile(forReading: audio),
+               file.processingFormat.sampleRate > 0,
+               let lastEnd = segments.map(\.end).max()
+            {
+                let audioDuration = Double(file.length) / file.processingFormat.sampleRate
+                if audioDuration - lastEnd > 10 {
+                    log(dir, "warning: \(track.file) is \(Int(audioDuration))s but transcript stops at \(Int(lastEnd))s — possible dropped tail")
+                }
             }
             let offset = TimeInterval(track.offsetMs) / 1000
             merged += segments.map {

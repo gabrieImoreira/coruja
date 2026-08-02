@@ -67,7 +67,7 @@ actor WhisperEngine: TranscriptionEngine {
             skipSpecialTokens: true,
             withoutTimestamps: false,
             wordTimestamps: false,
-            chunkingStrategy: .vad
+            chunkingStrategy: ChunkingStrategy.none
         )
 
         let results = try await pipe.transcribe(audioPath: audio.path, decodeOptions: options)
