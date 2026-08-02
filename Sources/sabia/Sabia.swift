@@ -41,13 +41,22 @@ struct Run: ParsableCommand {
         }
 
         let app = NSApplication.shared
-        app.setActivationPolicy(.accessory)
+        // Always a real Dock icon, not just while recording. The menu bar
+        // icon is not a reliable sole entry point — macOS drops third-party
+        // status items first when the bar is full, with no warning and no
+        // overflow chevron on some setups (confirmed live on a crowded Mac).
+        // A permanent Dock icon means sabia is always reachable regardless
+        // of menu bar state, same as any ordinary app (Cmd+Tab, clicking the
+        // Dock icon, right-click menu).
+        app.setActivationPolicy(.regular)
 
         let delegate = AppDelegate()
         app.delegate = delegate
 
         let controller = AppController(root: root)
         delegate.onDockMenu = { [weak controller] in controller?.dockMenu() ?? NSMenu() }
+        delegate.onReopen = { [weak controller] in controller?.openNotes() }
+        delegate.onWillTerminate = { [weak controller] in controller?.prepareForTermination() }
 
         let sigint = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
         sigint.setEventHandler {
@@ -64,15 +73,29 @@ struct Run: ParsableCommand {
     }
 }
 
-/// Supplies the Dock's right-click menu while sabia has a Dock icon (which
-/// only happens while recording — see AppController.startSession). Kept
-/// separate from AppController because NSApplicationDelegate must be an
-/// NSObject subclass.
+/// Supplies the Dock's right-click menu and handles clicking the Dock icon
+/// (which opens the notes window, standard "reopen" behavior for an app with
+/// no visible windows). Kept separate from AppController because
+/// NSApplicationDelegate must be an NSObject subclass.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     var onDockMenu: (() -> NSMenu)?
+    var onReopen: (() -> Void)?
+    var onWillTerminate: (() -> Void)?
 
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
         onDockMenu?()
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag { onReopen?() }
+        return true
+    }
+
+    /// Cmd-Q / Dock "Quit" — standard on a .regular app, unlike the old pure
+    /// menu-bar daemon — must still finalize any in-progress recording.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        onWillTerminate?()
+        return .terminateNow
     }
 }
 
@@ -111,11 +134,15 @@ final class AppController: NSObject {
     /// an unrelated Chrome tab closing.
     private var meetingRecordingURL: String?
 
+    private var notesWindow: NotesWindowController?
+    private let recordingStatus = RecordingStatus()
+
     init(root: URL) {
         self.root = root
         super.init()
         menuBar.onToggle = { [weak self] in self?.toggle() }
         menuBar.onOpenFolder = { [weak self] in self?.openFolder() }
+        menuBar.onOpenNotes = { [weak self] in self?.openNotes() }
         menuBar.onQuit = { [weak self] in self?.shutdown() }
         menuBar.update(recording: false, elapsed: nil)
         installHotkey()
@@ -197,13 +224,22 @@ final class AppController: NSObject {
         }
     }
 
-    /// Stop any live session cleanly (finalizing files) and exit.
+    /// Stop any live session cleanly (finalizing files) and exit. Used by
+    /// the menu's "Quit sabia" and Ctrl-C.
     func shutdown() {
+        prepareForTermination()
+        NSApp.terminate(nil)
+    }
+
+    /// Same cleanup as shutdown(), without triggering termination itself —
+    /// for AppDelegate.applicationShouldTerminate, called for standard
+    /// Cmd-Q/Dock-Quit on a .regular app, which must not recurse into
+    /// another NSApp.terminate() call.
+    func prepareForTermination() {
         stopSession()
         if let globalHotkeyMonitor { NSEvent.removeMonitor(globalHotkeyMonitor) }
         if let localHotkeyMonitor { NSEvent.removeMonitor(localHotkeyMonitor) }
         meetingPollTimer?.invalidate()
-        NSApp.terminate(nil)
     }
 
     private func toggle() {
@@ -227,16 +263,17 @@ final class AppController: NSObject {
         }
 
         menuBar.update(recording: true, elapsed: "0:00")
+        recordingStatus.isRecording = true
+        recordingStatus.elapsed = "0:00"
         // macOS overlays a system microphone badge on top of the menu bar
         // icon while recording, which can leave it unclickable — this
         // notification is the only reliable confirmation that recording
         // actually started (and a reminder that ⌃⌥⌘R stops it).
         notifyUser(title: "sabia — recording started", body: "⌃⌥⌘R, or the Dock icon, to stop")
-        // A second, independent way to reach Stop: give sabia a Dock icon
-        // for the duration of the recording. Dock icons aren't subject to
-        // the menu bar's mic-in-use badge takeover, so right-click → Stop
-        // Recording always works even when the menu bar icon doesn't.
-        NSApp.setActivationPolicy(.regular)
+        // The Dock icon (always present, see runMain) badges while
+        // recording — unlike the menu bar icon, it isn't subject to macOS
+        // dropping it for space or overlaying its own mic-in-use badge, so
+        // right-click → Stop Recording always works.
         NSApp.dockTile.badgeLabel = "●"
         NSApp.dockTile.display()
         ticker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
@@ -244,9 +281,9 @@ final class AppController: NSObject {
         }
     }
 
-    /// Right-click (or hold-click) menu for sabia's Dock icon, visible only
-    /// while recording (see startSession/stopSession's activation policy
-    /// toggle) — a click target for Stop that macOS can't paper over.
+    /// Right-click (or hold-click) menu for sabia's (always visible) Dock
+    /// icon — a click target for Start/Stop that macOS can't paper over or
+    /// drop for space, unlike the menu bar icon.
     func dockMenu() -> NSMenu {
         let menu = NSMenu()
         let item = NSMenuItem(
@@ -273,8 +310,9 @@ final class AppController: NSObject {
         ticker?.invalidate()
         ticker = nil
         menuBar.update(recording: false, elapsed: nil)
+        recordingStatus.isRecording = false
+        recordingStatus.elapsed = nil
         NSApp.dockTile.badgeLabel = nil
-        NSApp.setActivationPolicy(.accessory)
         meetingRecordingURL = nil
 
         let dir = session.dir
@@ -296,15 +334,35 @@ final class AppController: NSObject {
 
     private func tick() {
         guard let session else { return }
-        menuBar.update(
-            recording: true,
-            elapsed: Self.format(Date().timeIntervalSince(session.startedAt))
-        )
+        let elapsed = Self.format(Date().timeIntervalSince(session.startedAt))
+        menuBar.update(recording: true, elapsed: elapsed)
+        recordingStatus.elapsed = elapsed
     }
 
     private func openFolder() {
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         NSWorkspace.shared.open(root)
+    }
+
+    /// Opens the session-list + transcript-reader window (see
+    /// NotesWindowController) — reachable via the menu, the Dock icon
+    /// (clicking it when no window is open — see AppDelegate.onReopen), or
+    /// programmatically. Not `private`: AppDelegate's onReopen calls it too.
+    func openNotes() {
+        if let notesWindow {
+            notesWindow.window?.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+        let controller = NotesWindowController(
+            root: root,
+            status: recordingStatus,
+            onToggleRecording: { [weak self] in self?.toggle() }
+        )
+        controller.onClose = { [weak self] in self?.notesWindow = nil }
+        notesWindow = controller
+        controller.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     private static func format(_ interval: TimeInterval) -> String {

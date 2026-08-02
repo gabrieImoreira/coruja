@@ -12,6 +12,7 @@ final class MenuBarController {
 
     var onToggle: (() -> Void)?
     var onOpenFolder: (() -> Void)?
+    var onOpenNotes: (() -> Void)?
     var onQuit: (() -> Void)?
 
     init() {
@@ -30,6 +31,13 @@ final class MenuBarController {
         menu.addItem(transcriptionLabel)
 
         menu.addItem(.separator())
+
+        let openNotes = NSMenuItem(
+            title: "Abrir sabia",
+            action: #selector(openNotesClicked),
+            keyEquivalent: "n"
+        )
+        menu.addItem(openNotes)
 
         toggleItem = NSMenuItem(
             title: "Start recording",
@@ -54,7 +62,7 @@ final class MenuBarController {
         )
         menu.addItem(quit)
 
-        for item in [toggleItem, openFolder, quit] {
+        for item in [openNotes, toggleItem, openFolder, quit] {
             item.target = self
         }
 
@@ -91,5 +99,6 @@ final class MenuBarController {
 
     @objc private func toggleClicked() { onToggle?() }
     @objc private func openFolderClicked() { onOpenFolder?() }
+    @objc private func openNotesClicked() { onOpenNotes?() }
     @objc private func quitClicked() { onQuit?() }
 }

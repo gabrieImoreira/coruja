@@ -13,13 +13,14 @@ final class RecordingSession {
 
     private static let folderFormat: DateFormatter = {
         let f = DateFormatter()
-        f.dateFormat = "yyyy.MM.dd-HHmm"
+        f.dateFormat = "yyyy-MM-dd HH'h'mm"
         f.locale = Locale(identifier: "en_US_POSIX")
         return f
     }()
 
-    /// Create the session folder under `root` (yyyy.MM.dd-HHmm, suffixed on
-    /// collision) without starting capture yet.
+    /// Create the session folder under `root` ("yyyy-MM-dd HH'h'mm", suffixed
+    /// on collision) without starting capture yet. Just the timestamp, on
+    /// purpose — nothing derived (meeting name, app) gets appended.
     init(root: URL) throws {
         let base = Self.folderFormat.string(from: startedAt)
         var candidate = root.appendingPathComponent(base, isDirectory: true)
@@ -32,19 +33,27 @@ final class RecordingSession {
         dir = candidate
     }
 
+    /// Raw per-track files and session bookkeeping are dot-prefixed (hidden)
+    /// — internal inputs to transcription/mixdown, not what a user should see
+    /// browsing the folder. The only files meant to be seen are audio.m4a
+    /// (written later by AudioMixer) and transcript.md.
+    static let micFileName = ".mic.caf"
+    static let systemFileName = ".system.caf"
+    static let metaFileName = ".meta.json"
+
     /// Start both tracks. If the mic fails after the system tap started, the
     /// tap is torn down so we never run half a session silently.
     func start() throws {
-        try system.start(writingTo: dir.appendingPathComponent("system.caf"))
+        try system.start(writingTo: dir.appendingPathComponent(Self.systemFileName))
         do {
-            try mic.start(writingTo: dir.appendingPathComponent("mic.caf"))
+            try mic.start(writingTo: dir.appendingPathComponent(Self.micFileName))
         } catch {
             system.stop()
             throw error
         }
     }
 
-    /// Stop both tracks and write meta.json.
+    /// Stop both tracks and write .meta.json.
     func stop() {
         mic.stop()
         system.stop()
@@ -62,7 +71,7 @@ final class RecordingSession {
             "started": iso.string(from: startedAt),
             "ended": iso.string(from: ended),
             "duration_seconds": Int(ended.timeIntervalSince(startedAt)),
-            "files": ["mic": "mic.caf", "system": "system.caf"],
+            "files": ["mic": Self.micFileName, "system": Self.systemFileName],
             "start_offset_ms": [
                 "mic": Int(micStart.timeIntervalSince(earliest) * 1000),
                 "system": Int(systemStart.timeIntervalSince(earliest) * 1000),
@@ -72,7 +81,7 @@ final class RecordingSession {
             withJSONObject: meta,
             options: [.prettyPrinted, .sortedKeys]
         ) {
-            try? data.write(to: dir.appendingPathComponent("meta.json"))
+            try? data.write(to: dir.appendingPathComponent(Self.metaFileName))
         }
     }
 }

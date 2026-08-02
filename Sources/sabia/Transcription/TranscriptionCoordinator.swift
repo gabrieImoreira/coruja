@@ -1,13 +1,20 @@
 import Foundation
 
 /// Post-recording pipeline: a serial queue of session folders to transcribe.
-/// mic.caf → "me", system.caf → "them"; each track's segments are shifted by
-/// its start offset, merged by timestamp, and written as transcript.json
-/// (canonical) plus transcript.md (readable). The filesystem is the queue —
+/// .mic.caf → "me", .system.caf → "them"; each track's segments are shifted
+/// by its start offset, merged by timestamp, and written as .transcript.json
+/// (canonical, hidden) plus transcript.md (readable, visible). The two raw
+/// tracks are also mixed down into audio.m4a — the one audio file a user is
+/// meant to see; see AudioMixer. The filesystem is the queue —
 /// `resumePending()` rescans at launch, so a crash or quit mid-transcription
-/// just retries on next run. Failures append to the session's transcribe.log
-/// and never block later jobs.
+/// just retries on next run. Failures append to the session's
+/// .transcribe.log and never block later jobs.
 actor TranscriptionCoordinator {
+    static let transcriptJSONFileName = ".transcript.json"
+    static let transcriptMDFileName = "transcript.md"
+    static let audioFileName = "audio.m4a"
+    static let logFileName = ".transcribe.log"
+
     enum Status: Sendable {
         case idle
         case transcribing(session: String, queued: Int)
@@ -35,9 +42,9 @@ actor TranscriptionCoordinator {
         drainIfIdle()
     }
 
-    /// Scan the recordings root for sessions that finished (meta.json exists)
-    /// but were never transcribed. Folder names sort chronologically, so
-    /// oldest-first is a name sort.
+    /// Scan the recordings root for sessions that finished (.meta.json
+    /// exists) but were never transcribed. Folder names sort chronologically,
+    /// so oldest-first is a name sort.
     func resumePending(root: URL) {
         guard Config.transcriptionEnabled() else { return }
         guard let entries = try? FileManager.default.contentsOfDirectory(
@@ -47,8 +54,8 @@ actor TranscriptionCoordinator {
         let fm = FileManager.default
         let pending = entries
             .filter {
-                fm.fileExists(atPath: $0.appendingPathComponent("meta.json").path)
-                    && !fm.fileExists(atPath: $0.appendingPathComponent("transcript.json").path)
+                fm.fileExists(atPath: $0.appendingPathComponent(RecordingSession.metaFileName).path)
+                    && !fm.fileExists(atPath: $0.appendingPathComponent(Self.transcriptJSONFileName).path)
             }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
         for dir in pending where !queue.contains(dir) {
@@ -100,6 +107,17 @@ actor TranscriptionCoordinator {
     private func transcribe(_ dir: URL) async throws {
         let meta = try SessionMeta.read(from: dir)
         let engine = try await preparedEngine()
+
+        do {
+            try await AudioMixer.mixDown(
+                tracks: meta.tracks.map { (dir.appendingPathComponent($0.file), $0.offsetMs) },
+                to: dir.appendingPathComponent(Self.audioFileName)
+            )
+        } catch {
+            // The friendly audio.m4a is a nice-to-have, not the transcript —
+            // don't fail the whole session over a mixdown error.
+            log(dir, "audio mixdown failed: \(error)")
+        }
 
         var merged: [Transcript.Segment] = []
         for track in meta.tracks {
@@ -177,7 +195,7 @@ actor TranscriptionCoordinator {
 
     private func log(_ dir: URL, _ message: String) {
         let line = "\(ISO8601DateFormatter().string(from: Date())) \(message)\n"
-        let url = dir.appendingPathComponent("transcribe.log")
+        let url = dir.appendingPathComponent(Self.logFileName)
         if let handle = FileHandle(forWritingAtPath: url.path) {
             handle.seekToEndOfFile()
             handle.write(Data(line.utf8))
@@ -214,7 +232,7 @@ private struct SessionMeta {
     }
 
     static func read(from dir: URL) throws -> SessionMeta {
-        let url = dir.appendingPathComponent("meta.json")
+        let url = dir.appendingPathComponent(RecordingSession.metaFileName)
         guard
             let data = try? Data(contentsOf: url),
             let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -250,16 +268,17 @@ private struct Transcript: Codable {
     let created_at: String
     let segments: [Segment]
 
-    /// Write transcript.json and render transcript.md. Both writes are atomic
-    /// (temp file + rename), so a partially written transcript never exists on
-    /// disk — resumePending treats presence of transcript.json as "done".
+    /// Write .transcript.json (hidden, canonical) and transcript.md (visible,
+    /// readable). Both writes are atomic (temp file + rename), so a partially
+    /// written transcript never exists on disk — resumePending treats
+    /// presence of .transcript.json as "done".
     func write(to dir: URL) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(self)
-            .write(to: dir.appendingPathComponent("transcript.json"), options: .atomic)
+            .write(to: dir.appendingPathComponent(TranscriptionCoordinator.transcriptJSONFileName), options: .atomic)
         try Data(rendered(title: dir.lastPathComponent).utf8)
-            .write(to: dir.appendingPathComponent("transcript.md"), options: .atomic)
+            .write(to: dir.appendingPathComponent(TranscriptionCoordinator.transcriptMDFileName), options: .atomic)
     }
 
     private func rendered(title: String) -> String {
