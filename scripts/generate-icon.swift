@@ -26,11 +26,17 @@ func render(px: Int) -> NSBitmapImageRep {
     let full = NSRect(x: 0, y: 0, width: px, height: px)
     let corner = CGFloat(px) * 0.22
     let bg = NSBezierPath(roundedRect: full, xRadius: corner, yRadius: corner)
-    NSColor(calibratedRed: 0.06, green: 0.55, blue: 0.45, alpha: 1.0).setFill()
+    NSColor(calibratedWhite: 1.0, alpha: 1.0).setFill()
     bg.fill()
+    // A hairline border keeps the white icon from bleeding into a light
+    // Dock/Finder background — Apple's own monochrome icons (Calculator,
+    // Terminal) do the same.
+    NSColor(calibratedWhite: 0.85, alpha: 1.0).setStroke()
+    bg.lineWidth = CGFloat(px) * 0.006
+    bg.stroke()
 
     let symbolConfig = NSImage.SymbolConfiguration(pointSize: CGFloat(px) * 0.56, weight: .semibold)
-        .applying(NSImage.SymbolConfiguration(paletteColors: [.white]))
+        .applying(NSImage.SymbolConfiguration(paletteColors: [NSColor(calibratedWhite: 0.11, alpha: 1.0)]))
     if let symbol = NSImage(systemSymbolName: "waveform", accessibilityDescription: nil)?
         .withSymbolConfiguration(symbolConfig)
     {

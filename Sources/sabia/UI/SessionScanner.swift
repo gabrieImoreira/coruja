@@ -7,6 +7,7 @@ struct SessionEntry: Identifiable, Hashable {
     let hasTranscript: Bool
 
     var transcriptURL: URL { id.appendingPathComponent(TranscriptionCoordinator.transcriptMDFileName) }
+    var transcriptJSONURL: URL { id.appendingPathComponent(TranscriptionCoordinator.transcriptJSONFileName) }
     var audioURL: URL { id.appendingPathComponent(TranscriptionCoordinator.audioFileName) }
 }
 

@@ -258,7 +258,7 @@ final class AppController: NSObject {
             FileHandle.standardError.write(Data("● recording → \(newSession.dir.path)\n".utf8))
         } catch {
             FileHandle.standardError.write(Data("recording start failed: \(error)\n".utf8))
-            notifyUser(title: "sabia — recording failed", body: "\(error)")
+            notifyUser(title: "Não foi possível iniciar a gravação", body: "\(error)")
             return
         }
 
@@ -269,7 +269,7 @@ final class AppController: NSObject {
         // icon while recording, which can leave it unclickable — this
         // notification is the only reliable confirmation that recording
         // actually started (and a reminder that ⌃⌥⌘R stops it).
-        notifyUser(title: "sabia — recording started", body: "⌃⌥⌘R, or the Dock icon, to stop")
+        notifyUser(title: "Gravando", body: "⌃⌥⌘R ou o ícone no Dock para parar")
         // The Dock icon (always present, see runMain) badges while
         // recording — unlike the menu bar icon, it isn't subject to macOS
         // dropping it for space or overlaying its own mic-in-use badge, so
@@ -287,7 +287,7 @@ final class AppController: NSObject {
     func dockMenu() -> NSMenu {
         let menu = NSMenu()
         let item = NSMenuItem(
-            title: session == nil ? "Start recording" : "Stop recording",
+            title: session == nil ? "Iniciar gravação" : "Parar gravação",
             action: #selector(dockMenuToggle),
             keyEquivalent: ""
         )
@@ -305,7 +305,7 @@ final class AppController: NSObject {
         FileHandle.standardError.write(Data(
             "○ stopped · \(elapsed) · \(session.dir.path)\n".utf8
         ))
-        notifyUser(title: "sabia — recording stopped", body: "\(elapsed) · \(session.dir.lastPathComponent)")
+        notifyUser(title: "Gravação encerrada", body: "\(elapsed) · \(session.dir.lastPathComponent)")
         self.session = nil
         ticker?.invalidate()
         ticker = nil
@@ -325,10 +325,10 @@ final class AppController: NSObject {
             menuBar.updateTranscription(nil)
         case .transcribing(let name, let queued):
             menuBar.updateTranscription(
-                queued > 0 ? "transcribing \(name) · \(queued) queued" : "transcribing \(name)"
+                queued > 0 ? "transcrevendo \(name) · \(queued) na fila" : "transcrevendo \(name)"
             )
         case .failed(let name):
-            menuBar.updateTranscription("transcription failed · \(name)")
+            menuBar.updateTranscription("falha ao transcrever · \(name)")
         }
     }
 

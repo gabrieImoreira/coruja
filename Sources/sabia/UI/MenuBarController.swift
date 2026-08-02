@@ -21,7 +21,7 @@ final class MenuBarController {
         let menu = NSMenu()
         menu.autoenablesItems = false
 
-        stateLabel = NSMenuItem(title: "idle", action: nil, keyEquivalent: "")
+        stateLabel = NSMenuItem(title: "ocioso", action: nil, keyEquivalent: "")
         stateLabel.isEnabled = false
         menu.addItem(stateLabel)
 
@@ -40,14 +40,14 @@ final class MenuBarController {
         menu.addItem(openNotes)
 
         toggleItem = NSMenuItem(
-            title: "Start recording",
+            title: "Iniciar gravação",
             action: #selector(toggleClicked),
             keyEquivalent: "r"
         )
         menu.addItem(toggleItem)
 
         let openFolder = NSMenuItem(
-            title: "Open recordings folder",
+            title: "Abrir pasta de gravações",
             action: #selector(openFolderClicked),
             keyEquivalent: "o"
         )
@@ -56,7 +56,7 @@ final class MenuBarController {
         menu.addItem(.separator())
 
         let quit = NSMenuItem(
-            title: "Quit sabia",
+            title: "Sair do sabia",
             action: #selector(quitClicked),
             keyEquivalent: "q"
         )
@@ -84,8 +84,8 @@ final class MenuBarController {
     /// elapsed counter lives in the menu's state label. Call once a second
     /// while recording.
     func update(recording: Bool, elapsed: String?) {
-        stateLabel.title = recording ? "● recording · \(elapsed ?? "0:00")" : "idle"
-        toggleItem.title = recording ? "Stop recording" : "Start recording"
+        stateLabel.title = recording ? "● gravando · \(elapsed ?? "0:00")" : "ocioso"
+        toggleItem.title = recording ? "Parar gravação" : "Iniciar gravação"
         statusItem.button?.contentTintColor = recording ? .systemRed : nil
     }
 
