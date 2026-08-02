@@ -7,7 +7,7 @@ import Foundation
 /// detection only ever triggers a dismissable prompt, never an automatic
 /// recording, so a false positive costs a tap, not a surprise recording.
 ///
-/// First poll triggers a one-time "sabia wants to control Google Chrome"
+/// First poll triggers a one-time "coruja wants to control Google Chrome"
 /// Automation permission prompt (System Settings → Privacy & Security →
 /// Automation) — required for AppleScript to read tab URLs at all.
 actor MeetingDetector {

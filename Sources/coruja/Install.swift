@@ -1,17 +1,17 @@
 import ArgumentParser
 import Foundation
 
-/// Manage sabia's LaunchAgent so the daemon starts at login.
+/// Manage coruja's LaunchAgent so the daemon starts at login.
 ///
 /// We deliberately do NOT use SMAppService.mainApp here — that requires a full
-/// .app bundle. Since sabia ships as a single binary in /usr/local/bin, a
+/// .app bundle. Since coruja ships as a single binary in /usr/local/bin, a
 /// plain LaunchAgent plist is the simpler, more honest mechanism.
 struct Install: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Install or remove the launch-at-login LaunchAgent."
     )
 
-    @Flag(name: .long, help: "Register sabia to start at login.")
+    @Flag(name: .long, help: "Register coruja to start at login.")
     var launchAtLogin: Bool = false
 
     @Flag(name: .long, help: "Remove the launch-at-login agent.")
@@ -34,7 +34,7 @@ struct Install: ParsableCommand {
 
     // MARK: -
 
-    private static let label = "com.gabrieImoreira.sabia"
+    private static let label = "com.gabrieImoreira.coruja"
 
     private var plistURL: URL {
         let home = FileManager.default.homeDirectoryForCurrentUser
@@ -52,8 +52,8 @@ struct Install: ParsableCommand {
             "RunAtLoad": true,
             "KeepAlive": ["SuccessfulExit": false] as [String: Any],
             "ProcessType": "Interactive",
-            "StandardOutPath": "/tmp/sabia.out.log",
-            "StandardErrorPath": "/tmp/sabia.err.log",
+            "StandardOutPath": "/tmp/coruja.out.log",
+            "StandardErrorPath": "/tmp/coruja.err.log",
         ]
 
         let url = plistURL
@@ -80,7 +80,7 @@ struct Install: ParsableCommand {
         print("✓ launch-at-login installed")
         print("  plist:  \(url.path)")
         print("  binary: \(binary)")
-        print("  logs:   /tmp/sabia.out.log, /tmp/sabia.err.log")
+        print("  logs:   /tmp/coruja.out.log, /tmp/coruja.err.log")
     }
 
     private func removeAgent() throws {
@@ -95,22 +95,22 @@ struct Install: ParsableCommand {
     }
 
     private func resolveBinaryPath() throws -> String {
-        // /usr/local/bin/sabia is the canonical install path. Honor a real
+        // /usr/local/bin/coruja is the canonical install path. Honor a real
         // location if running from elsewhere (e.g. dev).
-        let candidate = "/usr/local/bin/sabia"
+        let candidate = "/usr/local/bin/coruja"
         if FileManager.default.isExecutableFile(atPath: candidate) {
             return candidate
         }
         // Fall back to the running executable's resolved path.
-        let argv0 = CommandLine.arguments.first ?? "sabia"
+        let argv0 = CommandLine.arguments.first ?? "coruja"
         if argv0.hasPrefix("/"), FileManager.default.isExecutableFile(atPath: argv0) {
             FileHandle.standardError.write(Data(
-                "note: /usr/local/bin/sabia not found; using \(argv0)\n".utf8
+                "note: /usr/local/bin/coruja not found; using \(argv0)\n".utf8
             ))
             return argv0
         }
         FileHandle.standardError.write(Data(
-            "couldn't locate the sabia binary. install it to /usr/local/bin/sabia first.\n".utf8
+            "couldn't locate the coruja binary. install it to /usr/local/bin/coruja first.\n".utf8
         ))
         throw ExitCode(1)
     }

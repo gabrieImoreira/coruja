@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 /// Hosts the notes browser in a normal, closable window. Opened on demand
-/// from the menu bar ("Abrir sabia"); AppController decides whether to keep
+/// from the menu bar ("Abrir coruja"); AppController decides whether to keep
 /// or drop the Dock icon when it closes (kept if a recording is still live).
 @MainActor
 final class NotesWindowController: NSWindowController, NSWindowDelegate {
@@ -15,7 +15,7 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = "sabia"
+        window.title = "Coruja"
         window.center()
         window.contentView = NSHostingView(
             rootView: NotesRootView(root: root, status: status, onToggleRecording: onToggleRecording)

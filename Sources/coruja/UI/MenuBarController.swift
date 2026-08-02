@@ -33,7 +33,7 @@ final class MenuBarController {
         menu.addItem(.separator())
 
         let openNotes = NSMenuItem(
-            title: "Abrir sabia",
+            title: "Abrir a Coruja",
             action: #selector(openNotesClicked),
             keyEquivalent: "n"
         )
@@ -56,7 +56,7 @@ final class MenuBarController {
         menu.addItem(.separator())
 
         let quit = NSMenuItem(
-            title: "Sair do sabia",
+            title: "Sair da Coruja",
             action: #selector(quitClicked),
             keyEquivalent: "q"
         )
@@ -71,7 +71,7 @@ final class MenuBarController {
         if let button = statusItem.button {
             let image = NSImage(
                 systemSymbolName: "waveform",
-                accessibilityDescription: "sabia"
+                accessibilityDescription: "coruja"
             )
             image?.isTemplate = true
             button.image = image

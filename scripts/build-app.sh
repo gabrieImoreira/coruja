@@ -1,5 +1,5 @@
 #!/bin/sh
-# Builds Sabia.app: a proper double-clickable bundle wrapping the same single
+# Builds Coruja.app: a proper double-clickable bundle wrapping the same single
 # binary the CLI install (`swift build -c release` + /usr/local/bin) uses.
 # Ad-hoc signed (codesign -s -) so it runs on Apple Silicon without needing an
 # Apple Developer account — recipients still see Gatekeeper's "unidentified
@@ -8,7 +8,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 
-APP=".build/Sabia.app"
+APP=".build/Coruja.app"
 rm -rf "$APP"
 
 echo "==> swift build -c release"
@@ -16,7 +16,7 @@ swift build -c release
 
 echo "==> assembling $APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp .build/release/sabia "$APP/Contents/MacOS/sabia"
+cp .build/release/coruja "$APP/Contents/MacOS/coruja"
 cp Packaging/Info.plist "$APP/Contents/Info.plist"
 cp Packaging/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
@@ -26,7 +26,7 @@ codesign --verify --verbose "$APP"
 
 echo "==> zipping"
 VERSION=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" Packaging/Info.plist)
-ZIP=".build/sabia-${VERSION}-macos.zip"
+ZIP=".build/coruja-${VERSION}-macos.zip"
 rm -f "$ZIP"
 ditto -c -k --keepParent "$APP" "$ZIP"
 

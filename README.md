@@ -1,4 +1,4 @@
-# sabia
+# Coruja
 
 Um app para Mac que **grava suas reuniões e já transcreve em português**,
 tudo no seu computador — nada é enviado para a internet. Feito para quem
@@ -22,9 +22,9 @@ com marcação de quem falou o quê.
 
 ## Como instalar
 
-1. Vá em [Releases](https://github.com/gabrieImoreira/sabia/releases) e
-   baixe o arquivo `sabia-<versão>-macos.zip` mais recente.
-2. Descompacte e arraste o `Sabia.app` para a pasta **Aplicativos**.
+1. Vá em [Releases](https://github.com/gabrieImoreira/coruja/releases) e
+   baixe o arquivo `coruja-<versão>-macos.zip` mais recente.
+2. Descompacte e arraste o `Coruja.app` para a pasta **Aplicativos**.
 3. **Só na primeira vez**: como este app não passou pelo processo pago de
    certificação da Apple, o macOS vai bloquear a abertura com um aviso de
    "não é possível verificar" / "mover para o lixo" — nem clique-direito →
@@ -32,7 +32,7 @@ com marcação de quem falou o quê.
    liberar, abra o app **Terminal** (Cmd+Espaço, digite "Terminal") e
    cole:
    ```sh
-   xattr -cr /Applications/Sabia.app
+   xattr -cr /Applications/Coruja.app
    ```
    Depois disso, o app abre normalmente com duplo-clique, como qualquer
    outro. (Se preferir tentar sem Terminal: Configurações do Sistema →
@@ -44,18 +44,18 @@ com marcação de quem falou o quê.
    muda.
 
 Pronto, é só isso. Se quiser que o app abra sozinho sempre que ligar o Mac:
-System Settings → General → Login Items → adicione o `Sabia.app`.
+System Settings → General → Login Items → adicione o `Coruja.app`.
 
 ## Como usar
 
-Depois de instalado, o sabia fica rodando discretamente com um ícone na
+Depois de instalado, a Coruja fica rodando discretamente com um ícone na
 barra de menu (topo da tela) e outro no Dock.
 
 **Pra gravar uma reunião**, qualquer uma dessas opções funciona:
-- Clique no ícone do sabia (barra de menu ou Dock) → **Iniciar gravação**
+- Clique no ícone da Coruja (barra de menu ou Dock) → **Iniciar gravação**
 - Aperte **⌃⌥⌘R** (Control + Option + Command + R) no teclado, de qualquer
   lugar
-- Se a reunião for pelo Chrome (Google Meet ou Teams), o sabia identifica
+- Se a reunião for pelo Chrome (Google Meet ou Teams), a Coruja identifica
   sozinho e pergunta **"Gravar?"** — é só clicar em **Gravar**
 
 **Pra parar**, é a mesma coisa: clique de novo, ou aperte ⌃⌥⌘R, ou (se a
@@ -64,7 +64,7 @@ para sozinha.
 
 Quando a gravação termina, a transcrição começa automaticamente e uma
 notificação avisa quando estiver pronta. Para ver, ouvir ou apagar
-qualquer gravação, abra a janela do sabia clicando no ícone do Dock.
+qualquer gravação, abra a janela da Coruja clicando no ícone do Dock.
 
 ### Onde ficam os arquivos
 
@@ -97,7 +97,7 @@ driver virtual, sem kernel extension). Apple Silicon recomendado.
 
 ### Por que existe um ícone permanente no Dock
 
-O quill original não tem ícone no Dock, só na barra de menu. O sabia
+O quill original não tem ícone no Dock, só na barra de menu. A Coruja
 mantém um ícone fixo no Dock por um motivo concreto, descoberto na prática:
 o macOS pode descartar silenciosamente o ícone de terceiros na barra de
 menu quando ela está cheia — sem aviso, sem seta de "mais ícones" — e
@@ -118,7 +118,7 @@ de teclado global.
 
 ### Detecção automática de reunião (Google Meet / Teams no Chrome)
 
-O sabia varre as abas abertas do Chrome a cada 5 segundos procurando uma
+A Coruja varre as abas abertas do Chrome a cada 5 segundos procurando uma
 URL de reunião do Google Meet ou Microsoft Teams. Ao encontrar, mostra um
 aviso no canto superior direito — **Gravar** / **Ignorar**. Se aceitar, a
 gravação para sozinha quando aquela aba específica fecha ou muda de URL.
@@ -129,7 +129,7 @@ antes de entrar na call, não só numa call já em andamento. Por isso a
 detecção só mostra um aviso dispensável, nunca grava sozinha sem
 confirmação.
 
-Na primeira detecção, pede permissão de automação **"sabia quer controlar
+Na primeira detecção, pede permissão de automação **"Coruja quer controlar
 o Google Chrome"** (System Settings → Privacy & Security → Automation) —
 sem ela, a detecção simplesmente não funciona (sem erro, sem travar).
 
@@ -140,17 +140,17 @@ automaticamente por uma aba do Chrome fechando — só uma gravação iniciada
 ### Build a partir do código
 
 ```sh
-cd sabia
-./scripts/build-app.sh        # -> .build/Sabia.app, .build/sabia-<versão>-macos.zip
+cd coruja
+./scripts/build-app.sh        # -> .build/Coruja.app, .build/coruja-<versão>-macos.zip
 ```
 
 Ou, para instalar como binário de linha de comando / LaunchAgent:
 
 ```sh
-cd sabia
+cd coruja
 swift build -c release
-sudo cp .build/release/sabia /usr/local/bin/sabia
-sabia install --launch-at-login   # opcional — roda em segundo plano no login
+sudo cp .build/release/coruja /usr/local/bin/coruja
+coruja install --launch-at-login   # opcional — roda em segundo plano no login
 ```
 
 ### Estrutura completa da pasta de sessão
@@ -174,7 +174,7 @@ Engine padrão é **Whisper large-v3-turbo** via
 [WhisperKit](https://github.com/argmaxinc/argmax-oss-swift), multilíngue,
 decodificando em português por padrão (`transcription.language`, padrão
 `"pt"`). Modelos (~1.5 GB) baixam uma vez na primeira transcrição;
-`sabia doctor` avisa se já estão em cache.
+`coruja doctor` avisa se já estão em cache.
 
 **Parakeet TDT 0.6B v2** (só inglês, via
 [FluidAudio](https://github.com/FluidInference/FluidAudio), ~600 MB, mais
@@ -199,7 +199,7 @@ reunião** e **zero áudio saindo da máquina**.
 
 ### Config
 
-Opcional, em `~/.config/sabia/config.json`:
+Opcional, em `~/.config/coruja/config.json`:
 
 ```json
 {
@@ -227,11 +227,11 @@ Opcional, em `~/.config/sabia/config.json`:
 ### CLI
 
 ```sh
-sabia                        # roda o daemon (^C pra sair)
-sabia run --out <pasta>      # raiz de gravações customizada
-sabia doctor                 # checa permissões, pasta, modelos
-sabia install --launch-at-login
-sabia install --uninstall
+coruja                        # roda o daemon (^C pra sair)
+coruja run --out <pasta>      # raiz de gravações customizada
+coruja doctor                 # checa permissões, pasta, modelos
+coruja install --launch-at-login
+coruja install --uninstall
 ```
 
 ### Stack
@@ -262,15 +262,15 @@ sabia install --uninstall
   você — na caixa de som (não fone), o áudio tocado vaza acusticamente de
   volta pro mic, e as duas trilhas capturam quase a mesma coisa,
   duplicando o texto uma vez como "me" e outra como "them". Chamadas reais
-  de duas pessoas por fone não sofrem disso; testar o sabia tocando um
+  de duas pessoas por fone não sofrem disso; testar a Coruja tocando um
   vídeo/música na caixa em vez de uma call de verdade mostra esse efeito.
   Correção: use fone, ou ative `mic_voice_processing: true` no config.
 - O binário embute seu Info.plist (`__TEXT,__info_plist`) pra que o TCC
-  atribua permissões ao sabia mesmo rodando como LaunchAgent sem bundle.
+  atribua permissões à Coruja mesmo rodando como LaunchAgent sem bundle.
 
 ### Relação com o upstream
 
 É um fork, não substituto direto — binário, identificador de bundle
-(`com.gabrieImoreira.sabia`), caminho de config e engine padrão divergem
+(`com.gabrieImoreira.coruja`), caminho de config e engine padrão divergem
 do quill pra que os dois coexistam na mesma máquina. Licença MIT, igual ao
 upstream (ver `LICENSE`).

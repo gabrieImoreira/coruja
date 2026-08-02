@@ -2,7 +2,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "sabia",
+    name: "coruja",
     platforms: [.macOS(.v15)],
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.3.0"),
@@ -11,7 +11,7 @@ let package = Package(
     ],
     targets: [
         .executableTarget(
-            name: "sabia",
+            name: "coruja",
             dependencies: [
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 .product(name: "FluidAudio", package: "FluidAudio"),
@@ -21,13 +21,13 @@ let package = Package(
             swiftSettings: [.swiftLanguageMode(.v5)],
             linkerSettings: [
                 // Embed Info.plist into the binary so TCC can attribute the
-                // system-audio-capture permission to sabia itself when it
+                // system-audio-capture permission to coruja itself when it
                 // runs as a LaunchAgent (no .app bundle to carry a plist).
                 .unsafeFlags([
                     "-Xlinker", "-sectcreate",
                     "-Xlinker", "__TEXT",
                     "-Xlinker", "__info_plist",
-                    "-Xlinker", "Sources/sabia/Info.plist",
+                    "-Xlinker", "Sources/coruja/Info.plist",
                 ]),
             ]
         ),

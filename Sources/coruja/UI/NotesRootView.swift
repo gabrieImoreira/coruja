@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 /// Session list + transcript reader — the real, ordinary-window surface
-/// sabia was missing when its only UI was a menu bar icon macOS can paper
+/// coruja was missing when its only UI was a menu bar icon macOS can paper
 /// over and a Dock icon that only appeared (and only helped) while
 /// recording. No summarization (unlike coconote) — just the recordings and
 /// their transcripts, browsable.
@@ -103,7 +103,7 @@ struct NotesRootView: View {
         }
         .listStyle(.sidebar)
         .navigationSplitViewColumnWidth(min: 200, ideal: 230)
-        .navigationTitle("sabia")
+        .navigationTitle("Coruja")
     }
 
     // MARK: - Detail

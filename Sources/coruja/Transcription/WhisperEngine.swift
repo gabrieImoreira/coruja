@@ -3,7 +3,7 @@ import Foundation
 import WhisperKit
 
 /// Whisper large-v3-turbo via WhisperKit's Core ML port (Argmax). Multilingual —
-/// unlike Parakeet, this is the engine sabia uses for Portuguese (and any other
+/// unlike Parakeet, this is the engine coruja uses for Portuguese (and any other
 /// language Whisper covers). Models (~600 MB - 1.5 GB depending on variant)
 /// download once into WhisperKit's managed cache; after that, transcription
 /// runs entirely on-device.

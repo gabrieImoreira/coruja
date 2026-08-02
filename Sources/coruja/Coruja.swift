@@ -3,9 +3,9 @@ import ArgumentParser
 import Foundation
 
 @main
-struct Sabia: ParsableCommand {
+struct Coruja: ParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "sabia",
+        commandName: "coruja",
         abstract: "Local meeting recorder + transcriber. Records mic and system audio as two tracks, then transcribes on-device.",
         subcommands: [Run.self, Doctor.self, Install.self],
         defaultSubcommand: Run.self
@@ -45,7 +45,7 @@ struct Run: ParsableCommand {
         // icon is not a reliable sole entry point — macOS drops third-party
         // status items first when the bar is full, with no warning and no
         // overflow chevron on some setups (confirmed live on a crowded Mac).
-        // A permanent Dock icon means sabia is always reachable regardless
+        // A permanent Dock icon means coruja is always reachable regardless
         // of menu bar state, same as any ordinary app (Cmd+Tab, clicking the
         // Dock icon, right-click menu).
         app.setActivationPolicy(.regular)
@@ -67,7 +67,7 @@ struct Run: ParsableCommand {
         signal(SIGINT, SIG_IGN)
 
         FileHandle.standardError.write(Data(
-            "sabia up · recordings → \(root.path) · ^C to quit\n".utf8
+            "coruja up · recordings → \(root.path) · ^C to quit\n".utf8
         ))
         app.run()
     }
@@ -160,7 +160,7 @@ final class AppController: NSObject {
 
     /// Polls Chrome for a Google Meet / Teams tab (see MeetingDetector) and
     /// prompts to record when one shows up; auto-stops if that same meeting
-    /// ends while sabia is still recording it.
+    /// ends while coruja is still recording it.
     private func setupMeetingDetector() {
         Task { [meetingDetector] in
             await meetingDetector.configure(
@@ -225,7 +225,7 @@ final class AppController: NSObject {
     }
 
     /// Stop any live session cleanly (finalizing files) and exit. Used by
-    /// the menu's "Quit sabia" and Ctrl-C.
+    /// the menu's "Quit coruja" and Ctrl-C.
     func shutdown() {
         prepareForTermination()
         NSApp.terminate(nil)
@@ -281,7 +281,7 @@ final class AppController: NSObject {
         }
     }
 
-    /// Right-click (or hold-click) menu for sabia's (always visible) Dock
+    /// Right-click (or hold-click) menu for coruja's (always visible) Dock
     /// icon — a click target for Start/Stop that macOS can't paper over or
     /// drop for space, unlike the menu bar icon.
     func dockMenu() -> NSMenu {

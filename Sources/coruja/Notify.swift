@@ -2,11 +2,11 @@ import Foundation
 import UserNotifications
 
 /// Best-effort user-visible notification via UserNotifications, so it's
-/// attributed to sabia's own icon in Notification Center. The previous
-/// osascript `display notification` approach (kept when sabia was a raw
+/// attributed to coruja's own icon in Notification Center. The previous
+/// osascript `display notification` approach (kept when coruja was a raw
 /// binary with no bundle) shows the Script Editor icon instead — osascript
 /// is the one actually calling the notification API, and macOS attributes
-/// it to that process, not to sabia.
+/// it to that process, not to coruja.
 private let center = UNUserNotificationCenter.current()
 private var authorizationRequested = false
 

@@ -1,6 +1,6 @@
 import Foundation
 
-/// Optional user config at ~/.config/sabia/config.json:
+/// Optional user config at ~/.config/coruja/config.json:
 ///
 ///     {
 ///       "recordings_dir": "~/Recordings",
@@ -15,7 +15,7 @@ import Foundation
 /// after recording when transcription is disabled.
 enum Config {
     static let path = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/sabia/config.json")
+        .appendingPathComponent(".config/coruja/config.json")
 
     static let defaultRoot = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent("Recordings", isDirectory: true)
@@ -38,7 +38,7 @@ enum Config {
         transcription()?["enabled"] as? Bool ?? true
     }
 
-    /// Configured engine name: "whisper" (multilingual, WhisperKit — sabia's
+    /// Configured engine name: "whisper" (multilingual, WhisperKit — coruja's
     /// default, since the whole point of this fork is pt-BR) or "parakeet"
     /// (English-only, FluidAudio, kept for parity with upstream quill). The
     /// coordinator warns and falls back to whisper for anything unrecognized.
