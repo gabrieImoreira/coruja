@@ -43,7 +43,11 @@ struct Run: ParsableCommand {
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
 
+        let delegate = AppDelegate()
+        app.delegate = delegate
+
         let controller = AppController(root: root)
+        delegate.onDockMenu = { [weak controller] in controller?.dockMenu() ?? NSMenu() }
 
         let sigint = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
         sigint.setEventHandler {
@@ -57,6 +61,18 @@ struct Run: ParsableCommand {
             "sabia up · recordings → \(root.path) · ^C to quit\n".utf8
         ))
         app.run()
+    }
+}
+
+/// Supplies the Dock's right-click menu while sabia has a Dock icon (which
+/// only happens while recording — see AppController.startSession). Kept
+/// separate from AppController because NSApplicationDelegate must be an
+/// NSObject subclass.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    var onDockMenu: (() -> NSMenu)?
+
+    func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
+        onDockMenu?()
     }
 }
 
@@ -77,7 +93,7 @@ struct Doctor: ParsableCommand {
 /// Owns the menu bar, the current recording session, and the elapsed-time
 /// ticker. All state transitions happen on the main actor.
 @MainActor
-final class AppController {
+final class AppController: NSObject {
     private let root: URL
     private let menuBar = MenuBarController()
     private let transcription = TranscriptionCoordinator()
@@ -86,13 +102,24 @@ final class AppController {
     private var globalHotkeyMonitor: Any?
     private var localHotkeyMonitor: Any?
 
+    private let meetingDetector = MeetingDetector()
+    private let meetingPrompt = MeetingPromptWindow()
+    private var meetingPollTimer: Timer?
+    /// Set when a recording was started from the meeting prompt, to the URL
+    /// that triggered it. Only a meeting ending that matches this URL
+    /// auto-stops — a manually started recording is never auto-stopped by
+    /// an unrelated Chrome tab closing.
+    private var meetingRecordingURL: String?
+
     init(root: URL) {
         self.root = root
+        super.init()
         menuBar.onToggle = { [weak self] in self?.toggle() }
         menuBar.onOpenFolder = { [weak self] in self?.openFolder() }
         menuBar.onQuit = { [weak self] in self?.shutdown() }
         menuBar.update(recording: false, elapsed: nil)
         installHotkey()
+        setupMeetingDetector()
 
         Task { [transcription, root] in
             await transcription.setStatusHandler { status in
@@ -102,6 +129,45 @@ final class AppController {
             }
             await transcription.resumePending(root: root)
         }
+    }
+
+    /// Polls Chrome for a Google Meet / Teams tab (see MeetingDetector) and
+    /// prompts to record when one shows up; auto-stops if that same meeting
+    /// ends while sabia is still recording it.
+    private func setupMeetingDetector() {
+        Task { [meetingDetector] in
+            await meetingDetector.configure(
+                onStarted: { [weak self] url in
+                    Task { @MainActor in self?.handleMeetingDetected(url) }
+                },
+                onEnded: { [weak self] url in
+                    Task { @MainActor in self?.handleMeetingEnded(url) }
+                }
+            )
+        }
+        // Created on the main actor so it rides NSApplication's main run
+        // loop — a Timer made inside MeetingDetector's own (non-main) actor
+        // has no run loop pumping it and silently never fires.
+        meetingPollTimer = Timer.scheduledTimer(withTimeInterval: MeetingDetector.pollInterval, repeats: true) { [weak self] _ in
+            Task { [weak self] in await self?.meetingDetector.poll() }
+        }
+    }
+
+    private func handleMeetingDetected(_ url: String) {
+        guard session == nil else { return } // already recording something
+        meetingPrompt.show(
+            onRecord: { [weak self] in
+                self?.meetingRecordingURL = url
+                self?.startSession()
+            },
+            onIgnore: {}
+        )
+    }
+
+    private func handleMeetingEnded(_ url: String) {
+        guard meetingRecordingURL == url, session != nil else { return }
+        meetingRecordingURL = nil
+        stopSession()
     }
 
     /// Global toggle-recording shortcut (⌃⌥⌘R), independent of the menu bar
@@ -136,6 +202,7 @@ final class AppController {
         stopSession()
         if let globalHotkeyMonitor { NSEvent.removeMonitor(globalHotkeyMonitor) }
         if let localHotkeyMonitor { NSEvent.removeMonitor(localHotkeyMonitor) }
+        meetingPollTimer?.invalidate()
         NSApp.terminate(nil)
     }
 
@@ -164,11 +231,35 @@ final class AppController {
         // icon while recording, which can leave it unclickable — this
         // notification is the only reliable confirmation that recording
         // actually started (and a reminder that ⌃⌥⌘R stops it).
-        notifyUser(title: "sabia — recording started", body: "⌃⌥⌘R (or the menu) to stop")
+        notifyUser(title: "sabia — recording started", body: "⌃⌥⌘R, or the Dock icon, to stop")
+        // A second, independent way to reach Stop: give sabia a Dock icon
+        // for the duration of the recording. Dock icons aren't subject to
+        // the menu bar's mic-in-use badge takeover, so right-click → Stop
+        // Recording always works even when the menu bar icon doesn't.
+        NSApp.setActivationPolicy(.regular)
+        NSApp.dockTile.badgeLabel = "●"
+        NSApp.dockTile.display()
         ticker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
         }
     }
+
+    /// Right-click (or hold-click) menu for sabia's Dock icon, visible only
+    /// while recording (see startSession/stopSession's activation policy
+    /// toggle) — a click target for Stop that macOS can't paper over.
+    func dockMenu() -> NSMenu {
+        let menu = NSMenu()
+        let item = NSMenuItem(
+            title: session == nil ? "Start recording" : "Stop recording",
+            action: #selector(dockMenuToggle),
+            keyEquivalent: ""
+        )
+        item.target = self
+        menu.addItem(item)
+        return menu
+    }
+
+    @objc private func dockMenuToggle() { toggle() }
 
     private func stopSession() {
         guard let session else { return }
@@ -182,6 +273,9 @@ final class AppController {
         ticker?.invalidate()
         ticker = nil
         menuBar.update(recording: false, elapsed: nil)
+        NSApp.dockTile.badgeLabel = nil
+        NSApp.setActivationPolicy(.accessory)
+        meetingRecordingURL = nil
 
         let dir = session.dir
         Task { [transcription] in await transcription.enqueue(dir) }

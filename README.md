@@ -50,6 +50,29 @@ Privacy & Security → Input Monitoring) — required for any app-wide global
 keyboard shortcut; harmless without a monitoring purpose, but a real
 permission worth reading the prompt for.
 
+### Automatic meeting detection (Google Meet / Teams in Chrome)
+
+sabia polls Chrome's open tabs every 5 seconds for a Google Meet or
+Microsoft Teams meeting URL. When one shows up, a small prompt appears in
+the top-right corner — **Gravar** / **Ignorar**. Accept it and sabia starts
+recording; when that same meeting's tab closes or navigates away, the
+recording **stops automatically**.
+
+There's no public macOS API for "a meeting is in progress," so this is a
+URL-pattern heuristic — it can trigger on the pre-join lobby, not only an
+actually-joined call. That's on purpose: detection only ever shows a
+dismissable prompt, never starts recording by itself, so a false positive
+costs a tap, not a surprise recording.
+
+First poll triggers a one-time **"sabia wants to control Google Chrome"**
+Automation permission prompt (System Settings → Privacy & Security →
+Automation) — required for AppleScript to read tab URLs at all; without it,
+detection silently does nothing (no crash, just no prompts).
+
+A recording started manually (menu, Dock, or ⌃⌥⌘R) is never auto-stopped by
+a Chrome tab closing — only a recording started *from the meeting prompt*
+is tied to that meeting's lifecycle.
+
 To build the `.app` yourself instead of downloading a release:
 
 ```sh
