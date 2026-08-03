@@ -25,6 +25,12 @@ actor TranscriptionCoordinator {
     private var queue: [URL] = []
     private var draining = false
     private var engine: TranscriptionEngine?
+    /// Set while a prepare() is in flight, so a concurrent caller (warmUp()
+    /// racing an actual transcription — both can call preparedEngine()
+    /// before either finishes, since actor reentrancy lets them interleave
+    /// at the `await engine.prepare()` suspension point) awaits the same
+    /// load instead of constructing and loading a second engine instance.
+    private var preparingTask: Task<TranscriptionEngine, Error>?
     private var lastFailure: String?
     private var statusHandler: (@Sendable (Status) -> Void)?
 
@@ -41,6 +47,16 @@ actor TranscriptionCoordinator {
         }
         queue.append(sessionDir)
         drainIfIdle()
+    }
+
+    /// Loads the transcription engine right away instead of waiting for the
+    /// first real transcription — Core ML's one-time per-launch model
+    /// specialization takes on the order of a couple minutes (confirmed
+    /// live). Warming it at app launch means that cost lands quietly in the
+    /// background instead of stalling the first meeting's transcript.
+    func warmUp() {
+        guard Config.transcriptionEnabled() else { return }
+        Task { _ = try? await preparedEngine() }
     }
 
     /// Scan the recordings root for sessions that finished (.meta.json
@@ -93,8 +109,12 @@ actor TranscriptionCoordinator {
                 notifyUser(title: "Não foi possível transcrever", body: dir.lastPathComponent)
             }
         }
-        await engine?.release()
-        engine = nil
+        // Deliberately not releasing the engine here anymore: reloading it
+        // costs on the order of minutes (Core ML's one-time per-launch model
+        // specialization, confirmed live), so a menu-bar app used for
+        // several meetings across a day should pay that cost once via
+        // warmUp(), not before every single recording. ~1.5GB held for the
+        // life of the process is the trade.
         publish(lastFailure.map { .failed(session: $0) } ?? .idle)
         draining = false
         // An enqueue that landed between the loop exiting and the release
@@ -171,22 +191,31 @@ actor TranscriptionCoordinator {
 
     private func preparedEngine() async throws -> TranscriptionEngine {
         if let engine { return engine }
+        if let preparingTask { return try await preparingTask.value }
+
         let configured = Config.transcriptionEngine()
-        let engine: TranscriptionEngine
+        let newEngine: TranscriptionEngine
         switch configured {
         case "parakeet":
-            engine = ParakeetEngine()
+            newEngine = ParakeetEngine()
         case "whisper":
-            engine = WhisperEngine(language: Config.transcriptionLanguage())
+            newEngine = WhisperEngine(language: Config.transcriptionLanguage())
         default:
             FileHandle.standardError.write(Data(
                 "warning: unknown transcription engine \"\(configured)\" — using whisper\n".utf8
             ))
-            engine = WhisperEngine(language: Config.transcriptionLanguage())
+            newEngine = WhisperEngine(language: Config.transcriptionLanguage())
         }
-        try await engine.prepare()
-        self.engine = engine
-        return engine
+
+        let task = Task<TranscriptionEngine, Error> {
+            try await newEngine.prepare()
+            return newEngine
+        }
+        preparingTask = task
+        defer { preparingTask = nil }
+        let prepared = try await task.value
+        self.engine = prepared
+        return prepared
     }
 
     /// Fires the configured on_stop shell command with the session directory

@@ -154,6 +154,7 @@ final class AppController: NSObject {
                     self?.showTranscription(status)
                 }
             }
+            await transcription.warmUp()
             await transcription.resumePending(root: root)
         }
     }
