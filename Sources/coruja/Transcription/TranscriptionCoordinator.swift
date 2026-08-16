@@ -13,6 +13,7 @@ import Foundation
 actor TranscriptionCoordinator {
     static let transcriptJSONFileName = ".transcript.json"
     static let transcriptMDFileName = "transcript.md"
+    static let summaryMDFileName = "summary.md"
     static let audioFileName = "audio.m4a"
     static let logFileName = ".transcribe.log"
 
@@ -225,6 +226,49 @@ actor TranscriptionCoordinator {
         )
         try transcript.write(to: dir)
         log(dir, "done — \(merged.count) segments")
+
+        if Config.llmPassEnabled() {
+            await runSummary(for: merged, in: dir)
+        }
+    }
+
+    /// Opt-in local-LLM pass (see Config.llmPassEnabled / SummaryEngine).
+    /// A failure here (Ollama not running, model not pulled, bad JSON back)
+    /// is logged and otherwise ignored — the transcript is already written
+    /// and is the thing that matters; the summary is a bonus.
+    private func runSummary(for segments: [Transcript.Segment], in dir: URL) async {
+        let timed = segments.map {
+            SummaryEngine.TimedSegment(speaker: $0.speaker, text: $0.text, startMs: $0.start_ms)
+        }
+        do {
+            let summary = try await SummaryEngine.summarize(
+                segments: timed,
+                model: Config.llmModel(),
+                endpoint: Config.llmEndpoint()
+            )
+            try Self.renderedSummary(summary).write(
+                to: dir.appendingPathComponent(Self.summaryMDFileName),
+                atomically: true, encoding: .utf8
+            )
+            log(dir, "summary written — \(summary.itensDeAcao.count) action item(s)")
+        } catch {
+            log(dir, "summary skipped: \(error)")
+        }
+    }
+
+    private static func renderedSummary(_ summary: SummaryEngine.Summary) -> String {
+        var lines = ["## Resumo", "", summary.resumo, ""]
+        if !summary.itensDeAcao.isEmpty {
+            lines.append("## Itens de ação")
+            lines.append("")
+            for item in summary.itensDeAcao {
+                var line = "- \(item.item)"
+                if let responsavel = item.responsavel { line += " — **\(responsavel)**" }
+                if let prazo = item.prazo { line += " (prazo: \(prazo))" }
+                lines.append(line)
+            }
+        }
+        return lines.joined(separator: "\n")
     }
 
     private func preparedEngine() async throws -> TranscriptionEngine {

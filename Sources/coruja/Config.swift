@@ -59,6 +59,28 @@ enum Config {
         load()?["transcription"] as? [String: Any]
     }
 
+    /// Optional local-LLM pass over the finished transcript (summary + action
+    /// items). Off by default — it's an extra local model download/run cost
+    /// on top of the transcription engine, and unlike everything else this
+    /// app does, its output is *generated* text rather than a direct
+    /// transcription, so it should never turn on without the user asking.
+    /// Always local (Ollama) — no cloud option, matching every other part of
+    /// this app's "nothing leaves the machine" design.
+    static func llmPassEnabled() -> Bool {
+        transcription()?["llm_pass"] as? Bool ?? false
+    }
+
+    /// Ollama model tag. Needs to already be pulled (`ollama pull <tag>`).
+    static func llmModel() -> String {
+        transcription()?["llm_model"] as? String ?? "llama3.1:8b"
+    }
+
+    /// Ollama's local HTTP endpoint.
+    static func llmEndpoint() -> URL {
+        let raw = transcription()?["llm_endpoint"] as? String ?? "http://localhost:11434"
+        return URL(string: raw) ?? URL(string: "http://localhost:11434")!
+    }
+
     /// Apple voice processing (acoustic echo cancellation) on the mic, so
     /// speaker playback doesn't bleed into the mic track and get transcribed
     /// as "me". Default off — the live voice unit ducks all other playback,
