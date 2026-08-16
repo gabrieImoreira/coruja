@@ -67,8 +67,13 @@ actor WhisperEngine: TranscriptionEngine {
     /// - Parameters:
     ///   - language: ISO-639-1 code passed to WhisperKit's decoder (e.g. "pt"
     ///     for Portuguese). `nil` lets Whisper auto-detect per segment.
-    ///   - modelVariant: WhisperKit model name. Defaults to the turbo variant
-    ///     Argmax recommends for on-device speed/accuracy on Apple Silicon.
+    ///   - modelVariant: WhisperKit model name. Turbo (4 decoder layers vs 32):
+    ///     confirmed live that the non-turbo variant takes well over 2x as
+    ///     long on a real 87min meeting. Most of the accuracy win already
+    ///     came from the hallucination filter + gain-normalization fix on
+    ///     turbo itself (WER 26.3% -> 14.8%, no model change) — fast
+    ///     turnaround right after a meeting ends matters more here than
+    ///     the additional accuracy non-turbo gets, so this stays turbo.
     init(language: String? = "pt", modelVariant: String = "large-v3-v20240930_turbo") {
         self.language = language
         self.modelVariant = modelVariant
