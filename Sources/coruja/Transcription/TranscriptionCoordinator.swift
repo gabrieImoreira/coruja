@@ -34,6 +34,13 @@ actor TranscriptionCoordinator {
     private var lastFailure: String?
     private var statusHandler: (@Sendable (Status) -> Void)?
 
+    /// Speaker separation for the "them" (system audio) track only — the mic
+    /// side is already ground truth per-track, one person. Lazily prepared on
+    /// first use, same pattern as the transcription engine; not part of
+    /// warmUp() since it's a smaller, separate model cost.
+    private var diarizer: DiarizationEngine?
+    private var diarizerPreparingTask: Task<DiarizationEngine, Error>?
+
     func setStatusHandler(_ handler: @escaping @Sendable (Status) -> Void) {
         statusHandler = handler
     }
@@ -167,13 +174,44 @@ actor TranscriptionCoordinator {
                     log(dir, "warning: \(track.file) is \(Int(audioDuration))s but transcript stops at \(Int(lastEnd))s — possible dropped tail")
                 }
             }
+            // Speaker separation only on the remote side — the mic track is
+            // already ground truth for "me", one person, nothing to separate.
+            var spans: [DiarizationEngine.SpeakerSpan]?
+            if track.speaker == "them" {
+                do {
+                    let diarizer = try await preparedDiarizer()
+                    let samples = try AudioPrep.load(audio)
+                    spans = try await diarizer.diarize(samples: samples)
+                    if let spans {
+                        let distinct = Set(spans.map(\.speakerId)).count
+                        log(dir, "\(track.file): \(distinct) speaker(s) separated")
+                    } else {
+                        log(dir, "\(track.file): no speech to diarize — labeling as \"outro\"")
+                    }
+                } catch {
+                    // Diarization is an enhancement, not the transcript itself —
+                    // a failure here shouldn't cost the session its text.
+                    log(dir, "diarization failed for \(track.file): \(error) — labeling as \"outro\"")
+                }
+            }
+
             let offset = TimeInterval(track.offsetMs) / 1000
-            merged += segments.map {
-                Transcript.Segment(
-                    speaker: track.speaker,
-                    start_ms: Int(($0.start + offset) * 1000),
-                    end_ms: Int(($0.end + offset) * 1000),
-                    text: $0.text
+            merged += segments.map { segment in
+                let speaker: String
+                if let spans, let id = DiarizationEngine.speaker(
+                    forSegmentFrom: segment.start, to: segment.end, in: spans
+                ) {
+                    speaker = id
+                } else if track.speaker == "them" {
+                    speaker = "outro"
+                } else {
+                    speaker = track.speaker
+                }
+                return Transcript.Segment(
+                    speaker: speaker,
+                    start_ms: Int((segment.start + offset) * 1000),
+                    end_ms: Int((segment.end + offset) * 1000),
+                    text: segment.text
                 )
             }
         }
@@ -215,6 +253,22 @@ actor TranscriptionCoordinator {
         defer { preparingTask = nil }
         let prepared = try await task.value
         self.engine = prepared
+        return prepared
+    }
+
+    private func preparedDiarizer() async throws -> DiarizationEngine {
+        if let diarizer { return diarizer }
+        if let diarizerPreparingTask { return try await diarizerPreparingTask.value }
+
+        let task = Task<DiarizationEngine, Error> {
+            let newDiarizer = DiarizationEngine()
+            try await newDiarizer.prepare()
+            return newDiarizer
+        }
+        diarizerPreparingTask = task
+        defer { diarizerPreparingTask = nil }
+        let prepared = try await task.value
+        self.diarizer = prepared
         return prepared
     }
 

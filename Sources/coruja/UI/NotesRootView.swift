@@ -344,7 +344,7 @@ struct NotesRootView: View {
         let isMe = segment.speaker == "me"
         return VStack(alignment: .leading, spacing: 5) {
             HStack {
-                Text(isMe ? "EU" : "OUTRO")
+                Text(isMe ? "EU" : segment.speaker.uppercased())
                     .font(.system(size: 11, weight: .bold))
                     .tracking(0.6)
                     .foregroundStyle(isMe ? theme.speakerMe : theme.speakerOther)
@@ -428,7 +428,7 @@ struct NotesRootView: View {
     private func plainTextFromSegments() -> String {
         guard let transcript else { return "" }
         return transcript.segments
-            .map { "[\(Self.formatMs($0.start_ms))] \($0.speaker == "me" ? "Eu" : "Outro"): \($0.text)" }
+            .map { "[\(Self.formatMs($0.start_ms))] \($0.speaker == "me" ? "Eu" : $0.speaker): \($0.text)" }
             .joined(separator: "\n")
     }
 

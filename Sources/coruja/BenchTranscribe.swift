@@ -70,6 +70,9 @@ struct Transcribe: ParsableCommand {
             let segments: [OutSegment]
         }
 
+        let diarizer = DiarizationEngine()
+        try await diarizer.prepare()
+
         var merged: [OutSegment] = []
         for track in tracks {
             let audio = dir.appendingPathComponent(track.file)
@@ -79,13 +82,33 @@ struct Transcribe: ParsableCommand {
             }
             FileHandle.standardError.write(Data("transcribing \(track.file)...\n".utf8))
             let segments = try await engine.transcribe(audio)
+
+            var spans: [DiarizationEngine.SpeakerSpan]?
+            if track.speaker == "them" {
+                FileHandle.standardError.write(Data("diarizing \(track.file)...\n".utf8))
+                let samples = try AudioPrep.load(audio)
+                spans = try await diarizer.diarize(samples: samples)
+                let distinct = spans.map { Set($0.map(\.speakerId)).count } ?? 0
+                FileHandle.standardError.write(Data("\(track.file): \(distinct) speaker(s) separated\n".utf8))
+            }
+
             let offset = TimeInterval(track.offsetMs) / 1000
-            merged += segments.map {
-                OutSegment(
-                    speaker: track.speaker,
-                    start_ms: Int(($0.start + offset) * 1000),
-                    end_ms: Int(($0.end + offset) * 1000),
-                    text: $0.text
+            merged += segments.map { segment in
+                let speaker: String
+                if let spans, let id = DiarizationEngine.speaker(
+                    forSegmentFrom: segment.start, to: segment.end, in: spans
+                ) {
+                    speaker = id
+                } else if track.speaker == "them" {
+                    speaker = "outro"
+                } else {
+                    speaker = track.speaker
+                }
+                return OutSegment(
+                    speaker: speaker,
+                    start_ms: Int((segment.start + offset) * 1000),
+                    end_ms: Int((segment.end + offset) * 1000),
+                    text: segment.text
                 )
             }
         }
