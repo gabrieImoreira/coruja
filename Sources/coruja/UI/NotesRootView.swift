@@ -23,6 +23,8 @@ struct NotesRootView: View {
     @State private var transcriptFallback: String = ""
     @State private var copied = false
     @State private var recordDotPulsed = false
+    @State private var editingTitle = false
+    @State private var titleDraft = ""
     @StateObject private var player = AudioPlayerModel()
 
     private var theme: Theme { Theme(isDark: isDarkMode) }
@@ -202,10 +204,21 @@ struct NotesRootView: View {
     private func sidebarRow(_ session: SessionEntry) -> some View {
         let selected = session.id == selection
         return VStack(alignment: .leading, spacing: 3) {
-            Text("\(session.dayGroupLabel), \(session.timeLabel)")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(theme.rowTitleColor)
-                .lineLimit(1)
+            if let title = session.title {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(theme.rowTitleColor)
+                    .lineLimit(1)
+                Text("\(session.dayGroupLabel), \(session.timeLabel)")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(theme.rowDurationColor)
+                    .lineLimit(1)
+            } else {
+                Text("\(session.dayGroupLabel), \(session.timeLabel)")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(theme.rowTitleColor)
+                    .lineLimit(1)
+            }
             HStack(spacing: 6) {
                 Circle()
                     .fill(session.hasTranscript ? theme.dotOn : theme.dotOff)
@@ -274,10 +287,37 @@ struct NotesRootView: View {
 
     private func header(for session: SessionEntry) -> some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text("\(session.dayGroupLabel), \(session.timeLabel)")
-                .font(.system(size: 25, weight: .semibold))
-                .foregroundStyle(theme.headerTitleColor)
-                .textSelection(.enabled)
+            if editingTitle {
+                TextField("Nome da reunião", text: $titleDraft)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 25, weight: .semibold))
+                    .foregroundStyle(theme.headerTitleColor)
+                    .onSubmit { saveTitle(session) }
+                    .onExitCommand { editingTitle = false }
+            } else {
+                HStack(spacing: 8) {
+                    Text(session.title ?? "\(session.dayGroupLabel), \(session.timeLabel)")
+                        .font(.system(size: 25, weight: .semibold))
+                        .foregroundStyle(theme.headerTitleColor)
+                        .textSelection(.enabled)
+                        .lineLimit(1)
+                    Button {
+                        titleDraft = session.title ?? ""
+                        editingTitle = true
+                    } label: {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 12))
+                            .foregroundStyle(theme.metaColor)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Editar nome")
+                }
+            }
+            if session.title != nil {
+                Text("\(session.dayGroupLabel), \(session.timeLabel)")
+                    .font(.system(size: 12))
+                    .foregroundStyle(theme.metaColor)
+            }
             if let transcript {
                 Text("\(transcript.segments.count) trechos · \(transcript.model)")
                     .font(.system(size: 12))
@@ -285,6 +325,12 @@ struct NotesRootView: View {
             }
         }
         .padding(.bottom, 22)
+    }
+
+    private func saveTitle(_ session: SessionEntry) {
+        SessionScanner.saveTitle(titleDraft, for: session)
+        editingTitle = false
+        reload()
     }
 
     private var playerCard: some View {
@@ -433,6 +479,7 @@ struct NotesRootView: View {
     }
 
     private func loadContent(for session: SessionEntry) {
+        editingTitle = false
         transcript = TranscriptDTO.load(from: session.transcriptJSONURL)
         transcriptFallback = transcript == nil ? SessionScanner.transcriptText(for: session) : ""
         if FileManager.default.fileExists(atPath: session.audioURL.path) {

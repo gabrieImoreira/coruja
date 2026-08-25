@@ -7,10 +7,14 @@ struct SessionEntry: Identifiable, Hashable {
     let displayName: String
     let hasTranscript: Bool
     let durationSeconds: Int?
+    /// From `.title` (see TitleEngine) — nil until the opt-in LLM pass
+    /// writes one, or if the user never edited it in. Never the folder name.
+    let title: String?
 
     var transcriptURL: URL { id.appendingPathComponent(TranscriptionCoordinator.transcriptMDFileName) }
     var transcriptJSONURL: URL { id.appendingPathComponent(TranscriptionCoordinator.transcriptJSONFileName) }
     var audioURL: URL { id.appendingPathComponent(TranscriptionCoordinator.audioFileName) }
+    var titleURL: URL { id.appendingPathComponent(TitleEngine.titleFileName) }
 
     /// "Hoje", "Ontem", or a formatted date — the sidebar's section header.
     var dayGroupLabel: String {
@@ -75,9 +79,11 @@ enum SessionScanner {
                     atPath: dir.appendingPathComponent(TranscriptionCoordinator.transcriptMDFileName).path
                 )
                 let duration = readDurationSeconds(dir: dir)
+                let title = readTitle(dir: dir)
                 return SessionEntry(
                     id: dir, date: date, displayName: display,
-                    hasTranscript: hasTranscript, durationSeconds: duration
+                    hasTranscript: hasTranscript, durationSeconds: duration,
+                    title: title
                 )
             }
     }
@@ -85,6 +91,24 @@ enum SessionScanner {
     static func transcriptText(for entry: SessionEntry) -> String {
         (try? String(contentsOf: entry.transcriptURL, encoding: .utf8))
             ?? "Transcrição ainda não disponível (pendente ou em processamento)."
+    }
+
+    private static func readTitle(dir: URL) -> String? {
+        guard let raw = try? String(contentsOf: dir.appendingPathComponent(TitleEngine.titleFileName), encoding: .utf8)
+        else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// Overwrites (or, if `title` is empty, deletes) `.title` — used by the
+    /// notes window's inline editor. Never touches the folder name itself.
+    static func saveTitle(_ title: String, for entry: SessionEntry) {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            try? FileManager.default.removeItem(at: entry.titleURL)
+        } else {
+            try? trimmed.write(to: entry.titleURL, atomically: true, encoding: .utf8)
+        }
     }
 
     private static func readDurationSeconds(dir: URL) -> Int? {

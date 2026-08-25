@@ -168,7 +168,9 @@ Além de `audio.m4a` e `transcript.md` (os dois arquivos visíveis),
 cada pasta guarda arquivos ocultos (prefixo `.`) usados internamente:
 `.mic.caf`/`.system.caf` (as duas trilhas brutas, mantidas para permitir
 re-transcrição), `.meta.json` (timestamps/offsets), `.transcript.json`
-(a transcrição em formato de máquina), `.transcribe.log`. Duas trilhas
+(a transcrição em formato de máquina), `.transcribe.log`, e `.title`
+(título curto da reunião, só com `transcription.llm_pass` ligado — ver
+"Título da reunião" abaixo). Duas trilhas
 brutas de propósito: modelos de fala funcionam melhor com áudio de fonte
 única, e mic-vs-sistema já dá diarização gratuita — `me` vs `them` sem
 nenhum modelo de identificação de locutor (ver Gotchas abaixo pros limites
@@ -235,6 +237,28 @@ Opcional, em `~/.config/coruja/config.json`:
   microfone e seja transcrito duas vezes.
 - `on_stop` — comando de shell disparado com a pasta da sessão como
   argumento, depois que a transcrição for escrita.
+- `transcription.llm_pass` — `true` liga um passo opcional, sempre local
+  (via [Ollama](https://ollama.com), nada sai da máquina), que gera
+  `summary.md` (resumo + itens de ação) e um título curto pra reunião
+  (ver seção "Título da reunião" abaixo). Desligado por padrão — é texto
+  *gerado*, não transcrito, então só liga se o usuário pedir. Precisa do
+  Ollama rodando (`ollama serve`) com o modelo já baixado
+  (`transcription.llm_model`, padrão `"llama3.1:8b"`;
+  `transcription.llm_endpoint`, padrão `"http://localhost:11434"`).
+
+#### Título da reunião
+
+Com `transcription.llm_pass` ligado, cada sessão ganha um título curto
+automático na janela de notas (ex: "Reembolso e ajustes de previdência"),
+em vez de só a hora — sem precisar lembrar de renomear nada. Gerado em
+duas etapas: primeiro um passo determinístico (sem LLM) compara as
+palavras desta reunião com as das últimas sessões pra achar o que é
+distintivo *desta* conversa (evita repetir jargão que aparece em toda
+reunião sua); depois uma chamada rápida ao Ollama transforma essas
+palavras num título legível. Fica salvo em `.title` (nunca no nome da
+pasta) e é editável a qualquer momento clicando no lápis ao lado do
+título, na janela de notas — útil porque, como qualquer texto gerado,
+ocasionalmente sai errado.
 
 ### CLI
 

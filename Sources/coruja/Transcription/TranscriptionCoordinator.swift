@@ -229,6 +229,7 @@ actor TranscriptionCoordinator {
 
         if Config.llmPassEnabled() {
             await runSummary(for: merged, in: dir)
+            await runTitle(for: merged, in: dir)
         }
     }
 
@@ -253,6 +254,29 @@ actor TranscriptionCoordinator {
             log(dir, "summary written — \(summary.itensDeAcao.count) action item(s)")
         } catch {
             log(dir, "summary skipped: \(error)")
+        }
+    }
+
+    /// Opt-in, same as runSummary — see TitleEngine. A failure here (Ollama
+    /// down, not enough text, bad response) just leaves `.title` unwritten;
+    /// the session falls back to showing its timestamp, same as today.
+    private func runTitle(for segments: [Transcript.Segment], in dir: URL) async {
+        let simplified = segments.map { (speaker: $0.speaker, text: $0.text) }
+        do {
+            let title = try await TitleEngine.generate(
+                segments: simplified,
+                root: dir.deletingLastPathComponent(),
+                excluding: dir,
+                model: Config.llmModel(),
+                endpoint: Config.llmEndpoint()
+            )
+            try title.write(
+                to: dir.appendingPathComponent(TitleEngine.titleFileName),
+                atomically: true, encoding: .utf8
+            )
+            log(dir, "title: \(title)")
+        } catch {
+            log(dir, "title skipped: \(error)")
         }
     }
 
