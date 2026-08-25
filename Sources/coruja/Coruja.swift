@@ -7,7 +7,7 @@ struct Coruja: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "coruja",
         abstract: "Local meeting recorder + transcriber. Records mic and system audio as two tracks, then transcribes on-device.",
-        subcommands: [Run.self, Doctor.self, Install.self, Transcribe.self, Summarize.self],
+        subcommands: [Run.self, Doctor.self, Install.self, Transcribe.self, Summarize.self, PrefetchModel.self],
         defaultSubcommand: Run.self
     )
 }

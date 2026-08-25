@@ -86,7 +86,13 @@ actor WhisperEngine: TranscriptionEngine {
         // real model state here (right after prepare) instead of `false` by
         // default and only becoming accurate after the first transcribe()
         // call lazily loads it — checked once, at prepare time, below.
-        let whisper = try await WhisperKit(WhisperKitConfig(model: modelVariant, verbose: false, load: true))
+        let bundled = Self.bundledModelFolder()
+        let whisper = try await WhisperKit(WhisperKitConfig(
+            model: modelVariant,
+            modelFolder: bundled?.path,
+            verbose: false,
+            load: true
+        ))
         pipe = whisper
         wordTimestampsAvailable = whisper.textDecoder.supportsWordTimestamps
         if !wordTimestampsAvailable {
@@ -204,5 +210,16 @@ actor WhisperEngine: TranscriptionEngine {
 
     func release() async {
         pipe = nil
+    }
+
+    /// `Coruja.app/Contents/Resources/whisperkit-model`, if `scripts/build-app.sh`
+    /// bundled the model there — resolves via `Bundle.main` so it only exists
+    /// when actually running from the .app. Not present for a `swift build`
+    /// dev run or a plain CLI install at `/usr/local/bin`, where WhisperKit
+    /// falls back to its normal download-and-cache behavior (`modelFolder: nil`).
+    private static func bundledModelFolder() -> URL? {
+        guard let resources = Bundle.main.resourceURL else { return nil }
+        let candidate = resources.appendingPathComponent("whisperkit-model", isDirectory: true)
+        return FileManager.default.fileExists(atPath: candidate.path) ? candidate : nil
     }
 }

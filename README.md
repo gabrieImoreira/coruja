@@ -23,7 +23,10 @@ com marcação de quem falou o quê.
 ## Como instalar
 
 1. Vá em [Releases](https://github.com/gabrieImoreira/coruja/releases) e
-   baixe o arquivo `coruja-<versão>-macos.zip` mais recente.
+   baixe o arquivo `coruja-<versão>-macos.zip` mais recente. É um arquivo
+   grande (~1.4 GB) porque já vem com o modelo de transcrição embutido —
+   depois de instalado, a coruja transcreve sem precisar baixar nada nem
+   depender de internet.
 2. Descompacte e arraste o `Coruja.app` para a pasta **Aplicativos**.
 3. **Só na primeira vez**: como este app não passou pelo processo pago de
    certificação da Apple, o macOS vai bloquear a abertura com um aviso de
@@ -144,6 +147,12 @@ cd coruja
 ./scripts/build-app.sh        # -> .build/Coruja.app, .build/coruja-<versão>-macos.zip
 ```
 
+O script baixa o modelo Whisper (se ainda não estiver em cache) e o
+empacota dentro de `Coruja.app/Contents/Resources/whisperkit-model` — por
+isso a primeira execução do script pode demorar alguns minutos e o
+`.zip` final sai com ~1.4 GB. Rodadas seguintes reusam o modelo já
+cacheado em `~/Documents/huggingface`.
+
 Ou, para instalar como binário de linha de comando / LaunchAgent:
 
 ```sh
@@ -173,8 +182,11 @@ transcrição (ver `AudioMixer.swift`).
 Engine padrão é **Whisper large-v3-turbo** via
 [WhisperKit](https://github.com/argmaxinc/argmax-oss-swift), multilíngue,
 decodificando em português por padrão (`transcription.language`, padrão
-`"pt"`). Modelos (~1.5 GB) baixam uma vez na primeira transcrição;
-`coruja doctor` avisa se já estão em cache.
+`"pt"`). No `Coruja.app` baixado em [Releases](https://github.com/gabrieImoreira/coruja/releases)
+o modelo (~1.5 GB) já vem embutido, sem download nem internet
+necessários. Rodando via `swift build` / CLI (sem o `.app`), o modelo
+baixa uma vez na primeira transcrição; `coruja doctor` avisa se já está
+em cache.
 
 **Parakeet TDT 0.6B v2** (só inglês, via
 [FluidAudio](https://github.com/FluidInference/FluidAudio), ~600 MB, mais
