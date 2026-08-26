@@ -19,6 +19,11 @@ struct SettingsRootView: View {
     @State private var micVoiceProcessing = false
     @State private var llmPassEnabled = false
     @State private var llmModel = "llama3.1:8b"
+    @State private var ollamaStatus: OllamaStatus = .checking
+
+    private enum OllamaStatus {
+        case checking, ok, notRunning, modelMissing
+    }
 
     private var theme: Theme { Theme(isDark: isDarkMode) }
 
@@ -98,8 +103,9 @@ struct SettingsRootView: View {
                                 .background(theme.playerCardBg, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
                                 .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(theme.border))
                                 .frame(maxWidth: 220)
-                                .onSubmit(save)
+                                .onSubmit { save(); checkOllama() }
                         }
+                        ollamaStatusRow
                     }
                 }
             }
@@ -108,12 +114,94 @@ struct SettingsRootView: View {
         .frame(minWidth: 480, minHeight: 420)
         .background(theme.windowBg)
         .preferredColorScheme(isDarkMode ? .dark : .light)
-        .onAppear(perform: load)
+        // Monochrome, same as the rest of the app — native Toggle/Picker
+        // default to the system accent color (blue) otherwise.
+        .tint(theme.rowTitleColor)
+        .onAppear {
+            load()
+            if llmPassEnabled { checkOllama() }
+        }
         .onChange(of: transcriptionEnabled) { _, _ in save() }
         .onChange(of: engine) { _, _ in save() }
         .onChange(of: language) { _, _ in save() }
         .onChange(of: micVoiceProcessing) { _, _ in save() }
-        .onChange(of: llmPassEnabled) { _, _ in save() }
+        .onChange(of: llmPassEnabled) { _, enabled in
+            save()
+            if enabled { checkOllama() }
+        }
+    }
+
+    // MARK: - Ollama status
+
+    private var ollamaStatusRow: some View {
+        HStack(spacing: 7) {
+            switch ollamaStatus {
+            case .checking:
+                ProgressView().controlSize(.mini)
+                Text("Verificando Ollama…")
+                    .font(.system(size: 11))
+                    .foregroundStyle(theme.metaColor)
+            case .ok:
+                Circle().fill(Color.green).frame(width: 6, height: 6)
+                Text("Ollama rodando, modelo pronto")
+                    .font(.system(size: 11))
+                    .foregroundStyle(theme.metaColor)
+            case .notRunning:
+                Circle().fill(Color.red).frame(width: 6, height: 6)
+                Text("Ollama não encontrado — rode \"ollama serve\" no Terminal")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.red)
+            case .modelMissing:
+                Circle().fill(Color.orange).frame(width: 6, height: 6)
+                Text("Ollama rodando, mas falta baixar o modelo — rode \"ollama pull \(llmModel)\"")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.orange)
+            }
+            Spacer()
+            Button(action: checkOllama) {
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(theme.metaColor)
+            }
+            .buttonStyle(.plain)
+            .help("Checar de novo")
+        }
+        .padding(.top, 2)
+    }
+
+    /// Hits Ollama's own /api/tags — cheap, no model load, and its response
+    /// already lists what's pulled, so one request answers both "is Ollama
+    /// running" and "is this specific model available" instead of needing
+    /// a second round-trip.
+    private func checkOllama() {
+        ollamaStatus = .checking
+        let endpoint = Config.llmEndpoint()
+        let model = llmModel
+        Task {
+            let status = await Self.probeOllama(endpoint: endpoint, model: model)
+            await MainActor.run { ollamaStatus = status }
+        }
+    }
+
+    private static func probeOllama(endpoint: URL, model: String) async -> OllamaStatus {
+        var request = URLRequest(url: endpoint.appendingPathComponent("api/tags"))
+        request.timeoutInterval = 4
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode)
+        else {
+            return .notRunning
+        }
+        struct TagsResponse: Decodable {
+            struct Model: Decodable { let name: String }
+            let models: [Model]
+        }
+        // An unparseable response still means Ollama answered — don't false-
+        // alarm on the model check if the schema ever shifts.
+        guard let tags = try? JSONDecoder().decode(TagsResponse.self, from: data) else {
+            return .ok
+        }
+        let hasModel = tags.models.contains { $0.name == model || $0.name.hasPrefix("\(model):") }
+        return hasModel ? .ok : .modelMissing
     }
 
     // MARK: - Sections
