@@ -186,7 +186,9 @@ final class AppController: NSObject {
     private func handleMeetingDetected(_ url: String) {
         guard session == nil else { return } // already recording something
         meetingPrompt.show(
-            onRecord: { [weak self] in
+            message: "Reunião detectada no Chrome.\nGravar com a coruja?",
+            actionTitle: "Gravar",
+            onAction: { [weak self] in
                 self?.meetingRecordingURL = url
                 self?.startSession()
             },
@@ -194,10 +196,20 @@ final class AppController: NSObject {
         )
     }
 
+    /// Only for a recording coruja itself started via the meeting-detected
+    /// prompt above (see meetingRecordingURL) — a manually started recording
+    /// is never touched by a Chrome tab closing, same rule as before this
+    /// existed, just surfaced now instead of silently auto-stopping.
     private func handleMeetingEnded(_ url: String) {
         guard meetingRecordingURL == url, session != nil else { return }
         meetingRecordingURL = nil
-        stopSession()
+        meetingPrompt.show(
+            message: "A reunião parece ter terminado.\nParar a gravação?",
+            actionTitle: "Parar",
+            ignoreTitle: "Continuar",
+            onAction: { [weak self] in self?.stopSession() },
+            onIgnore: {}
+        )
     }
 
     /// Global toggle-recording shortcut (⌃⌥⌘R), independent of the menu bar

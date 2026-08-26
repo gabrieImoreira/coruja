@@ -122,8 +122,10 @@ de teclado global.
 
 A coruja varre as abas abertas do Chrome a cada 5 segundos procurando uma
 URL de reunião do Google Meet ou Microsoft Teams. Ao encontrar, mostra um
-aviso no canto superior direito — **Gravar** / **Ignorar**. Se aceitar, a
-gravação para sozinha quando aquela aba específica fecha ou muda de URL.
+aviso no canto superior direito — **Gravar** / **Ignorar**. Se aceitar, e
+depois aquela aba específica fechar ou mudar de URL, a coruja mostra outro
+aviso — **Parar** / **Continuar** — em vez de encerrar a gravação sozinha
+sem avisar.
 
 Não existe API pública do macOS para "há uma reunião em andamento", então
 isso é uma heurística por padrão de URL — pode disparar na tela de espera
