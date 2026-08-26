@@ -11,8 +11,8 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
     convenience init(
         root: URL,
         status: RecordingStatus,
-        onToggleRecording: @escaping () -> Void,
-        onOpenSettings: @escaping () -> Void
+        navigation: NotesNavigation,
+        onToggleRecording: @escaping () -> Void
     ) {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 720, height: 460),
@@ -25,8 +25,8 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
         window.contentView = NSHostingView(
             rootView: NotesRootView(
                 root: root, status: status,
-                onToggleRecording: onToggleRecording,
-                onOpenSettings: onOpenSettings
+                navigation: navigation,
+                onToggleRecording: onToggleRecording
             )
         )
         self.init(window: window)

@@ -13,8 +13,8 @@ import SwiftUI
 struct NotesRootView: View {
     let root: URL
     @ObservedObject var status: RecordingStatus
+    @ObservedObject var navigation: NotesNavigation
     let onToggleRecording: () -> Void
-    let onOpenSettings: () -> Void
 
     @AppStorage("corujaDarkMode") private var isDarkMode = false
 
@@ -31,13 +31,19 @@ struct NotesRootView: View {
     private var theme: Theme { Theme(isDark: isDarkMode) }
 
     var body: some View {
-        VStack(spacing: 0) {
-            recordingBar
-            Divider().overlay(theme.border)
-            HStack(spacing: 0) {
-                sidebar
-                Divider().overlay(theme.border)
-                detail
+        Group {
+            if navigation.showingSettings {
+                settingsScreen
+            } else {
+                VStack(spacing: 0) {
+                    recordingBar
+                    Divider().overlay(theme.border)
+                    HStack(spacing: 0) {
+                        sidebar
+                        Divider().overlay(theme.border)
+                        detail
+                    }
+                }
             }
         }
         .frame(minWidth: 780, minHeight: 520)
@@ -72,6 +78,52 @@ struct NotesRootView: View {
     }
 
     @State private var pendingDelete: SessionEntry?
+
+    // MARK: - Settings screen
+
+    /// Full-screen swap inside this same window, not a separate window —
+    /// same pattern as most ordinary Mac apps that keep settings a "back"
+    /// away instead of another window to manage.
+    private var settingsScreen: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Button(action: { navigation.showingSettings = false }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("Voltar")
+                            .font(.system(size: 13, weight: .medium))
+                    }
+                    .foregroundStyle(theme.rowTitleColor)
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                Text("Configurações")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(theme.rowTitleColor)
+
+                Spacer()
+
+                // Balances the "Voltar" control's width so the title above
+                // sits visually centered instead of skewed left.
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.left").font(.system(size: 12, weight: .semibold))
+                    Text("Voltar").font(.system(size: 13, weight: .medium))
+                }
+                .opacity(0)
+                .accessibilityHidden(true)
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 14)
+            .background(theme.windowBg)
+
+            Divider().overlay(theme.border)
+
+            SettingsRootView()
+        }
+    }
 
     // MARK: - Recording bar
 
@@ -131,7 +183,7 @@ struct NotesRootView: View {
                 .font(.system(size: 12))
                 .foregroundStyle(theme.pathColor)
 
-            Button(action: onOpenSettings) {
+            Button(action: { navigation.showingSettings = true }) {
                 Image(systemName: "gearshape")
                     .font(.system(size: 13))
                     .foregroundStyle(theme.pathColor)

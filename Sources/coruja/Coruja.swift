@@ -135,8 +135,8 @@ final class AppController: NSObject {
     private var meetingRecordingURL: String?
 
     private var notesWindow: NotesWindowController?
-    private var settingsWindow: SettingsWindowController?
     private let recordingStatus = RecordingStatus()
+    private let navigation = NotesNavigation()
 
     init(root: URL) {
         self.root = root
@@ -372,8 +372,8 @@ final class AppController: NSObject {
         let controller = NotesWindowController(
             root: root,
             status: recordingStatus,
-            onToggleRecording: { [weak self] in self?.toggle() },
-            onOpenSettings: { [weak self] in self?.openSettings() }
+            navigation: navigation,
+            onToggleRecording: { [weak self] in self?.toggle() }
         )
         controller.onClose = { [weak self] in self?.notesWindow = nil }
         notesWindow = controller
@@ -381,19 +381,14 @@ final class AppController: NSObject {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    /// Opens the settings panel (see SettingsWindowController) — reachable
-    /// via the menu bar (⌘,) or the gear icon in the notes window.
+    /// Settings live inside the notes window as a full-screen swap with a
+    /// back button (see NotesNavigation), not a separate window — reachable
+    /// via the menu bar (⌘,) or the gear icon. Flips the shared flag first
+    /// so it's already set by the time the window's content renders,
+    /// whether that window exists yet or not.
     func openSettings() {
-        if let settingsWindow {
-            settingsWindow.window?.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
-        }
-        let controller = SettingsWindowController()
-        controller.onClose = { [weak self] in self?.settingsWindow = nil }
-        settingsWindow = controller
-        controller.showWindow(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        navigation.showingSettings = true
+        openNotes()
     }
 
     private static func format(_ interval: TimeInterval) -> String {
