@@ -79,12 +79,7 @@ final class MenuBarController {
         statusItem.menu = menu
 
         if let button = statusItem.button {
-            let image = NSImage(
-                systemSymbolName: "waveform",
-                accessibilityDescription: "coruja"
-            )
-            image?.isTemplate = true
-            button.image = image
+            button.image = Self.brandIcon()
             button.imagePosition = .imageLeft
         }
     }
@@ -105,6 +100,46 @@ final class MenuBarController {
     func updateTranscription(_ text: String?) {
         transcriptionLabel.title = text ?? ""
         transcriptionLabel.isHidden = text == nil
+    }
+
+    /// The coruja silhouette for the status item. Drawn directly instead of loading a bundled PNG — a rasterized-from-
+    /// SVG asset came back with its transparency flattened onto opaque
+    /// white (confirmed live: rendered as a solid white square in the menu
+    /// bar instead of a silhouette), and drawing it here sidesteps that
+    /// whole conversion pipeline. `.clear` compositing punches real alpha
+    /// holes for the eyes, which is what `isTemplate` needs outside the
+    /// owl shape.
+    private static func brandIcon() -> NSImage {
+        let size = NSSize(width: 18, height: 18)
+        let image = NSImage(size: size, flipped: false) { _ in
+            guard let ctx = NSGraphicsContext.current else { return false }
+            NSColor.black.setFill()
+
+            NSBezierPath(ovalIn: NSRect(x: 4.2, y: 5.6, width: 9.6, height: 9.6)).fill()
+
+            let earL = NSBezierPath()
+            earL.move(to: NSPoint(x: 5.4, y: 13.0))
+            earL.line(to: NSPoint(x: 4.3, y: 16.4))
+            earL.line(to: NSPoint(x: 7.2, y: 12.5))
+            earL.close()
+            earL.fill()
+
+            let earR = NSBezierPath()
+            earR.move(to: NSPoint(x: 12.6, y: 13.0))
+            earR.line(to: NSPoint(x: 13.7, y: 16.4))
+            earR.line(to: NSPoint(x: 10.8, y: 12.5))
+            earR.close()
+            earR.fill()
+
+            ctx.compositingOperation = .clear
+            NSBezierPath(ovalIn: NSRect(x: 6.0, y: 8.3, width: 2.6, height: 2.6)).fill()
+            NSBezierPath(ovalIn: NSRect(x: 9.4, y: 8.3, width: 2.6, height: 2.6)).fill()
+            ctx.compositingOperation = .sourceOver
+
+            return true
+        }
+        image.isTemplate = true
+        return image
     }
 
     @objc private func toggleClicked() { onToggle?() }
