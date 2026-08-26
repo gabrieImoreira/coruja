@@ -91,9 +91,8 @@ precisa mexer.)
 *A partir daqui é conteúdo para quem quiser entender ou mexer no código —
 não é necessário pra usar o app.*
 
-Fork de [digimata/quill](https://github.com/digimata/quill), trocando o
-engine de transcrição padrão para **Whisper (WhisperKit)** — o engine
-original do quill (Parakeet) só transcreve inglês.
+Engine de transcrição padrão é **Whisper (WhisperKit)**, multilíngue —
+cobre português e qualquer outro idioma que o Whisper suporte.
 
 **Requer:** macOS 15+ (Core Audio process taps para áudio do sistema — sem
 driver virtual, sem kernel extension). Apple Silicon recomendado.
