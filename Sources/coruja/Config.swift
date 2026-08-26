@@ -22,8 +22,15 @@ enum Config {
 
     /// The configured recordings root, or nil if no config file / no key.
     static func recordingsDir() -> URL? {
-        guard let dir = load()?["recordings_dir"] as? String, !dir.isEmpty else { return nil }
+        guard let dir = recordingsDirRaw(), !dir.isEmpty else { return nil }
         return URL(fileURLWithPath: (dir as NSString).expandingTildeInPath, isDirectory: true)
+    }
+
+    /// Unexpanded `recordings_dir` string as stored (e.g. `"~/Recordings"`),
+    /// for the Settings UI's text field — `recordingsDir()` expands `~` for
+    /// actual filesystem use, which isn't what you want to show or re-edit.
+    static func recordingsDirRaw() -> String? {
+        load()?["recordings_dir"] as? String
     }
 
     /// Shell command to spawn after each session's transcript is written (or
@@ -53,6 +60,14 @@ enum Config {
     static func transcriptionLanguage() -> String? {
         guard let lang = transcription()?["language"] as? String, !lang.isEmpty else { return "pt" }
         return lang == "auto" ? nil : lang
+    }
+
+    /// Raw stored language code, including the literal "auto" — unlike
+    /// `transcriptionLanguage()`, which collapses "auto" to `nil` for the
+    /// engine. The Settings UI needs the raw value to pre-select the right
+    /// picker option.
+    static func transcriptionLanguageCode() -> String {
+        transcription()?["language"] as? String ?? "pt"
     }
 
     private static func transcription() -> [String: Any]? {
@@ -88,6 +103,47 @@ enum Config {
     /// recording meetings through the speakers.
     static func micVoiceProcessing() -> Bool {
         load()?["mic_voice_processing"] as? Bool ?? false
+    }
+
+    /// Overwrites every key the Settings UI knows about, preserving anything
+    /// else already in the file (`on_stop`, `transcription.llm_endpoint` —
+    /// power-user keys with no UI, only ever set by hand). Called with a full
+    /// snapshot of the UI's state on every change, not incrementally, since
+    /// that's simpler than per-field patch methods and this file is tiny.
+    static func save(
+        recordingsDir: String,
+        transcriptionEnabled: Bool,
+        transcriptionEngine: String,
+        transcriptionLanguage: String,
+        llmPassEnabled: Bool,
+        llmModel: String,
+        micVoiceProcessing: Bool
+    ) {
+        var json = load() ?? [:]
+
+        let trimmedDir = recordingsDir.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedDir.isEmpty {
+            json.removeValue(forKey: "recordings_dir")
+        } else {
+            json["recordings_dir"] = trimmedDir
+        }
+        json["mic_voice_processing"] = micVoiceProcessing
+
+        var t = json["transcription"] as? [String: Any] ?? [:]
+        t["enabled"] = transcriptionEnabled
+        t["engine"] = transcriptionEngine
+        t["language"] = transcriptionLanguage
+        t["llm_pass"] = llmPassEnabled
+        let trimmedModel = llmModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        t["llm_model"] = trimmedModel.isEmpty ? "llama3.1:8b" : trimmedModel
+        json["transcription"] = t
+
+        let dir = path.deletingLastPathComponent()
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        guard let data = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]) else {
+            return
+        }
+        try? data.write(to: path, options: .atomic)
     }
 
     /// Parse the config file. A malformed config is reported on stderr rather

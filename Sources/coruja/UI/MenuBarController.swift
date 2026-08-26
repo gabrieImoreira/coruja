@@ -13,6 +13,7 @@ final class MenuBarController {
     var onToggle: (() -> Void)?
     var onOpenFolder: (() -> Void)?
     var onOpenNotes: (() -> Void)?
+    var onOpenSettings: (() -> Void)?
     var onQuit: (() -> Void)?
 
     init() {
@@ -55,6 +56,15 @@ final class MenuBarController {
 
         menu.addItem(.separator())
 
+        let openSettings = NSMenuItem(
+            title: "Configurações…",
+            action: #selector(openSettingsClicked),
+            keyEquivalent: ","
+        )
+        menu.addItem(openSettings)
+
+        menu.addItem(.separator())
+
         let quit = NSMenuItem(
             title: "Sair da coruja",
             action: #selector(quitClicked),
@@ -62,7 +72,7 @@ final class MenuBarController {
         )
         menu.addItem(quit)
 
-        for item in [openNotes, toggleItem, openFolder, quit] {
+        for item in [openNotes, toggleItem, openFolder, openSettings, quit] {
             item.target = self
         }
 
@@ -100,5 +110,6 @@ final class MenuBarController {
     @objc private func toggleClicked() { onToggle?() }
     @objc private func openFolderClicked() { onOpenFolder?() }
     @objc private func openNotesClicked() { onOpenNotes?() }
+    @objc private func openSettingsClicked() { onOpenSettings?() }
     @objc private func quitClicked() { onQuit?() }
 }

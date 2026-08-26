@@ -135,6 +135,7 @@ final class AppController: NSObject {
     private var meetingRecordingURL: String?
 
     private var notesWindow: NotesWindowController?
+    private var settingsWindow: SettingsWindowController?
     private let recordingStatus = RecordingStatus()
 
     init(root: URL) {
@@ -143,6 +144,7 @@ final class AppController: NSObject {
         menuBar.onToggle = { [weak self] in self?.toggle() }
         menuBar.onOpenFolder = { [weak self] in self?.openFolder() }
         menuBar.onOpenNotes = { [weak self] in self?.openNotes() }
+        menuBar.onOpenSettings = { [weak self] in self?.openSettings() }
         menuBar.onQuit = { [weak self] in self?.shutdown() }
         menuBar.update(recording: false, elapsed: nil)
         installHotkey()
@@ -358,10 +360,26 @@ final class AppController: NSObject {
         let controller = NotesWindowController(
             root: root,
             status: recordingStatus,
-            onToggleRecording: { [weak self] in self?.toggle() }
+            onToggleRecording: { [weak self] in self?.toggle() },
+            onOpenSettings: { [weak self] in self?.openSettings() }
         )
         controller.onClose = { [weak self] in self?.notesWindow = nil }
         notesWindow = controller
+        controller.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    /// Opens the settings panel (see SettingsWindowController) — reachable
+    /// via the menu bar (⌘,) or the gear icon in the notes window.
+    func openSettings() {
+        if let settingsWindow {
+            settingsWindow.window?.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+        let controller = SettingsWindowController()
+        controller.onClose = { [weak self] in self?.settingsWindow = nil }
+        settingsWindow = controller
         controller.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
     }

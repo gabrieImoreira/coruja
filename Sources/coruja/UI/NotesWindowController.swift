@@ -8,7 +8,12 @@ import SwiftUI
 final class NotesWindowController: NSWindowController, NSWindowDelegate {
     var onClose: (() -> Void)?
 
-    convenience init(root: URL, status: RecordingStatus, onToggleRecording: @escaping () -> Void) {
+    convenience init(
+        root: URL,
+        status: RecordingStatus,
+        onToggleRecording: @escaping () -> Void,
+        onOpenSettings: @escaping () -> Void
+    ) {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 720, height: 460),
             styleMask: [.titled, .closable, .resizable, .miniaturizable],
@@ -18,7 +23,11 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
         window.title = "coruja"
         window.center()
         window.contentView = NSHostingView(
-            rootView: NotesRootView(root: root, status: status, onToggleRecording: onToggleRecording)
+            rootView: NotesRootView(
+                root: root, status: status,
+                onToggleRecording: onToggleRecording,
+                onOpenSettings: onOpenSettings
+            )
         )
         self.init(window: window)
         window.delegate = self

@@ -14,6 +14,7 @@ struct NotesRootView: View {
     let root: URL
     @ObservedObject var status: RecordingStatus
     let onToggleRecording: () -> Void
+    let onOpenSettings: () -> Void
 
     @AppStorage("corujaDarkMode") private var isDarkMode = false
 
@@ -129,6 +130,14 @@ struct NotesRootView: View {
             Text("~/Recordings")
                 .font(.system(size: 12))
                 .foregroundStyle(theme.pathColor)
+
+            Button(action: onOpenSettings) {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 13))
+                    .foregroundStyle(theme.pathColor)
+            }
+            .buttonStyle(.plain)
+            .help("Configurações")
 
             themeToggle
         }
