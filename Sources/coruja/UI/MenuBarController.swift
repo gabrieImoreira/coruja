@@ -102,42 +102,63 @@ final class MenuBarController {
         transcriptionLabel.isHidden = text == nil
     }
 
-    /// The coruja silhouette for the status item. Drawn directly instead of loading a bundled PNG — a rasterized-from-
-    /// SVG asset came back with its transparency flattened onto opaque
-    /// white (confirmed live: rendered as a solid white square in the menu
-    /// bar instead of a silhouette), and drawing it here sidesteps that
-    /// whole conversion pipeline. `.clear` compositing punches real alpha
-    /// holes for the eyes, which is what `isTemplate` needs outside the
-    /// owl shape.
+    /// The coruja silhouette for the status item. Drawn directly instead of
+    /// loading a bundled PNG — a rasterized-from-SVG asset came back with
+    /// its transparency flattened onto opaque white (confirmed live —
+    /// rendered as a solid white square in the menu bar).
+    ///
+    /// Built against an explicit 8-bit sRGB `NSBitmapImageRep` rather than
+    /// `lockFocus()` — an earlier lockFocus-based version produced pixel-
+    /// perfect data (verified by sampling: opaque black head, transparent
+    /// eyes) but rendered as an invisible status item live; this explicit-
+    /// bitmap version is confirmed working in the real menu bar. `.clear`
+    /// compositing punches real alpha holes for the eyes, which is what
+    /// `isTemplate` needs outside the owl shape.
     private static func brandIcon() -> NSImage {
         let size = NSSize(width: 18, height: 18)
-        let image = NSImage(size: size, flipped: false) { _ in
-            guard let ctx = NSGraphicsContext.current else { return false }
-            NSColor.black.setFill()
+        let scale = 2 // one fixed backing resolution; AppKit downscales for @1x displays
+        let pixelSize = Int(size.width) * scale
 
-            NSBezierPath(ovalIn: NSRect(x: 4.2, y: 5.6, width: 9.6, height: 9.6)).fill()
-
-            let earL = NSBezierPath()
-            earL.move(to: NSPoint(x: 5.4, y: 13.0))
-            earL.line(to: NSPoint(x: 4.3, y: 16.4))
-            earL.line(to: NSPoint(x: 7.2, y: 12.5))
-            earL.close()
-            earL.fill()
-
-            let earR = NSBezierPath()
-            earR.move(to: NSPoint(x: 12.6, y: 13.0))
-            earR.line(to: NSPoint(x: 13.7, y: 16.4))
-            earR.line(to: NSPoint(x: 10.8, y: 12.5))
-            earR.close()
-            earR.fill()
-
-            ctx.compositingOperation = .clear
-            NSBezierPath(ovalIn: NSRect(x: 6.0, y: 8.3, width: 2.6, height: 2.6)).fill()
-            NSBezierPath(ovalIn: NSRect(x: 9.4, y: 8.3, width: 2.6, height: 2.6)).fill()
-            ctx.compositingOperation = .sourceOver
-
-            return true
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: pixelSize, pixelsHigh: pixelSize,
+            bitsPerSample: 8, samplesPerPixel: 4,
+            hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+        ), let ctx = NSGraphicsContext(bitmapImageRep: rep) else {
+            return NSImage(size: size)
         }
+
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = ctx
+        ctx.cgContext.scaleBy(x: CGFloat(scale), y: CGFloat(scale))
+
+        NSColor.black.setFill()
+        NSBezierPath(ovalIn: NSRect(x: 4.2, y: 5.6, width: 9.6, height: 9.6)).fill()
+
+        let earL = NSBezierPath()
+        earL.move(to: NSPoint(x: 5.4, y: 13.0))
+        earL.line(to: NSPoint(x: 4.3, y: 16.4))
+        earL.line(to: NSPoint(x: 7.2, y: 12.5))
+        earL.close()
+        earL.fill()
+
+        let earR = NSBezierPath()
+        earR.move(to: NSPoint(x: 12.6, y: 13.0))
+        earR.line(to: NSPoint(x: 13.7, y: 16.4))
+        earR.line(to: NSPoint(x: 10.8, y: 12.5))
+        earR.close()
+        earR.fill()
+
+        ctx.compositingOperation = .clear
+        NSBezierPath(ovalIn: NSRect(x: 6.0, y: 8.3, width: 2.6, height: 2.6)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 9.4, y: 8.3, width: 2.6, height: 2.6)).fill()
+        ctx.compositingOperation = .sourceOver
+
+        NSGraphicsContext.restoreGraphicsState()
+
+        let image = NSImage(size: size)
+        image.addRepresentation(rep)
         image.isTemplate = true
         return image
     }
