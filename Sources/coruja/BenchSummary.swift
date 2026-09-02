@@ -1,10 +1,11 @@
 import ArgumentParser
 import Foundation
 
-/// Runs the local-LLM summary pass over an already-transcribed session's
+/// Runs the OpenAI summary pass over an already-transcribed session's
 /// `.transcript.json`, without going through the full recording pipeline —
-/// for testing/tuning the summary prompt and Ollama setup in isolation.
-/// Writes `summary-test.md` next to the session, never touching `summary.md`.
+/// for testing/tuning the summary prompt and OpenAI API key setup in
+/// isolation. Writes `summary-test.md` next to the session, never touching
+/// `summary.md`.
 struct Summarize: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Run the local-LLM summary pass on an already-transcribed session (writes summary-test.md)."
@@ -42,14 +43,21 @@ struct Summarize: ParsableCommand {
             SummaryEngine.TimedSegment(speaker: $0.speaker, text: $0.text, startMs: $0.start_ms)
         }
 
-        FileHandle.standardError.write(Data("calling Ollama (\(Config.llmModel()))...\n".utf8))
+        guard let apiKey = OpenAIKeychain.get() else {
+            FileHandle.standardError.write(Data("no OpenAI API key configured (see Settings)\n".utf8))
+            throw SummaryEngine.SummaryError.missingAPIKey
+        }
+        let type = SummaryEngine.SummaryType(rawValue: Config.summaryType()) ?? .topicos
+        FileHandle.standardError.write(Data("calling OpenAI (\(Config.llmModel()), \(type.rawValue))...\n".utf8))
         let summary = try await SummaryEngine.summarize(
             segments: timed,
+            apiKey: apiKey,
             model: Config.llmModel(),
-            endpoint: Config.llmEndpoint()
+            summaryType: type
         )
 
-        var lines = ["## Resumo", "", summary.resumo, ""]
+        let heading = type == .ata ? "# Ata da reunião" : "# Resumo"
+        var lines = [heading, "", summary.resumo, ""]
         if !summary.itensDeAcao.isEmpty {
             lines.append("## Itens de ação")
             lines.append("")

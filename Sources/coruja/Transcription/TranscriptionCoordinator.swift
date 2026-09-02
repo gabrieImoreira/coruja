@@ -233,42 +233,52 @@ actor TranscriptionCoordinator {
         }
     }
 
-    /// Opt-in local-LLM pass (see Config.llmPassEnabled / SummaryEngine).
-    /// A failure here (Ollama not running, model not pulled, bad JSON back)
-    /// is logged and otherwise ignored — the transcript is already written
-    /// and is the thing that matters; the summary is a bonus.
+    /// Opt-in OpenAI pass (see Config.llmPassEnabled / SummaryEngine). A
+    /// failure here (no API key, bad response, rate limit) is logged and
+    /// otherwise ignored — the transcript is already written and is the
+    /// thing that matters; the summary is a bonus.
     private func runSummary(for segments: [Transcript.Segment], in dir: URL) async {
+        guard let apiKey = OpenAIKeychain.get() else {
+            log(dir, "summary skipped: no OpenAI API key configured")
+            return
+        }
+        let type = SummaryEngine.SummaryType(rawValue: Config.summaryType()) ?? .topicos
         let timed = segments.map {
             SummaryEngine.TimedSegment(speaker: $0.speaker, text: $0.text, startMs: $0.start_ms)
         }
         do {
             let summary = try await SummaryEngine.summarize(
                 segments: timed,
+                apiKey: apiKey,
                 model: Config.llmModel(),
-                endpoint: Config.llmEndpoint()
+                summaryType: type
             )
-            try Self.renderedSummary(summary).write(
+            try Self.renderedSummary(summary, type: type).write(
                 to: dir.appendingPathComponent(Self.summaryMDFileName),
                 atomically: true, encoding: .utf8
             )
-            log(dir, "summary written — \(summary.itensDeAcao.count) action item(s)")
+            log(dir, "summary written (\(type.rawValue)) — \(summary.itensDeAcao.count) action item(s)")
         } catch {
             log(dir, "summary skipped: \(error)")
         }
     }
 
-    /// Opt-in, same as runSummary — see TitleEngine. A failure here (Ollama
-    /// down, not enough text, bad response) just leaves `.title` unwritten;
+    /// Opt-in, same as runSummary — see TitleEngine. A failure here (no API
+    /// key, not enough text, bad response) just leaves `.title` unwritten;
     /// the session falls back to showing its timestamp, same as today.
     private func runTitle(for segments: [Transcript.Segment], in dir: URL) async {
+        guard let apiKey = OpenAIKeychain.get() else {
+            log(dir, "title skipped: no OpenAI API key configured")
+            return
+        }
         let simplified = segments.map { (speaker: $0.speaker, text: $0.text) }
         do {
             let title = try await TitleEngine.generate(
                 segments: simplified,
                 root: dir.deletingLastPathComponent(),
                 excluding: dir,
-                model: Config.llmModel(),
-                endpoint: Config.llmEndpoint()
+                apiKey: apiKey,
+                model: Config.llmModel()
             )
             try title.write(
                 to: dir.appendingPathComponent(TitleEngine.titleFileName),
@@ -280,8 +290,13 @@ actor TranscriptionCoordinator {
         }
     }
 
-    private static func renderedSummary(_ summary: SummaryEngine.Summary) -> String {
-        var lines = ["## Resumo", "", summary.resumo, ""]
+    /// `summary.resumo` already contains its own Markdown sub-headings
+    /// (## Tópicos / ### <topic> for `.topicos`, ## Pauta / ## Decisões for
+    /// `.ata`) — this just adds the document-level H1 and, if any, the
+    /// action items section.
+    private static func renderedSummary(_ summary: SummaryEngine.Summary, type: SummaryEngine.SummaryType) -> String {
+        let heading = type == .ata ? "# Ata da reunião" : "# Resumo"
+        var lines = [heading, "", summary.resumo, ""]
         if !summary.itensDeAcao.isEmpty {
             lines.append("## Itens de ação")
             lines.append("")
