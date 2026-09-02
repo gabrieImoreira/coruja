@@ -28,8 +28,6 @@ struct NotesRootView: View {
     @State private var titleDraft = ""
     @StateObject private var player = AudioPlayerModel()
 
-    private enum DetailTab { case transcript, summary }
-    @State private var detailTab: DetailTab = .transcript
     @State private var summaryTypeShown: SummaryEngine.SummaryType = .topicos
     @State private var summaryContent: [SummaryEngine.SummaryType: String] = [:]
     @State private var summaryGenerating: SummaryEngine.SummaryType?
@@ -136,33 +134,28 @@ struct NotesRootView: View {
 
     private var recordingBar: some View {
         HStack(spacing: 16) {
-            Image(nsImage: NSImage(named: NSImage.applicationIconName) ?? NSImage())
+            Image(nsImage: OwlMark.image(pixelSize: 88, ink: NSColor(theme.rowTitleColor)))
                 .resizable()
-                .frame(width: 30, height: 30)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .strokeBorder(Color.black.opacity(0.1), lineWidth: 1)
-                )
+                .frame(width: 40, height: 40)
 
             Button(action: onToggleRecording) {
-                HStack(spacing: 9) {
+                HStack(spacing: 6) {
                     if status.isRecording {
-                        RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        RoundedRectangle(cornerRadius: 1.5, style: .continuous)
                             .fill(Color.white)
-                            .frame(width: 9, height: 9)
+                            .frame(width: 7, height: 7)
                             .opacity(recordDotPulsed ? 0.35 : 1)
                     } else {
                         Circle()
                             .fill(theme.recordIdleColor)
-                            .frame(width: 8, height: 8)
+                            .frame(width: 6, height: 6)
                     }
-                    Text(status.isRecording ? "Parar gravação" : "Iniciar gravação")
-                        .font(.system(size: 13, weight: .semibold))
+                    Text(status.isRecording ? "Parar" : "Gravar")
+                        .font(.system(size: 12, weight: .medium))
                 }
                 .foregroundStyle(status.isRecording ? .white : theme.recordIdleColor)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+                .padding(.horizontal, 11)
+                .padding(.vertical, 5)
                 .background(
                     Capsule().fill(status.isRecording ? Theme.recordRed : theme.recordIdleBg)
                 )
@@ -329,17 +322,18 @@ struct NotesRootView: View {
                                     .padding(.top, 4)
                             }
 
-                            detailTabPicker
-                                .padding(.top, 22)
-                                .padding(.bottom, 18)
-
+                            // Resumo/ata is the primary surface — the raw
+                            // transcript is only shown as a fallback when
+                            // there's no way to ever get a resumo for this
+                            // session (no OpenAI key configured).
                             Group {
-                                if detailTab == .transcript {
-                                    transcriptBody
-                                } else {
+                                if Config.openaiApiKey() != nil {
                                     summaryBody(for: session)
+                                } else {
+                                    transcriptBody
                                 }
                             }
+                            .padding(.top, 22)
                             .padding(.bottom, 24)
                         }
                         .frame(maxWidth: 640, alignment: .leading)
@@ -486,17 +480,6 @@ struct NotesRootView: View {
     }
 
     // MARK: - Summary / ata
-
-    private var detailTabPicker: some View {
-        Picker("", selection: $detailTab) {
-            Text("Transcrição").tag(DetailTab.transcript)
-            Text("Resumo").tag(DetailTab.summary)
-        }
-        .labelsHidden()
-        .pickerStyle(.segmented)
-        .frame(maxWidth: 280)
-        .tint(theme.rowTitleColor)
-    }
 
     private func summaryBody(for session: SessionEntry) -> some View {
         VStack(alignment: .leading, spacing: 16) {
