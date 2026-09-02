@@ -33,7 +33,8 @@ let package = Package(
         ),
         .testTarget(
             name: "corujaTests",
-            dependencies: ["coruja"]
+            dependencies: ["coruja"],
+            swiftSettings: [.swiftLanguageMode(.v5)]
         ),
     ]
 )

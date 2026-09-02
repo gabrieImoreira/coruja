@@ -6,6 +6,10 @@
     <string>com.gabrieImoreira.coruja</string>
     <key>CFBundleName</key>
     <string>coruja</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.6.0</string>
+    <key>CFBundleVersion</key>
+    <string>24</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>coruja records your microphone during meetings so you can transcribe them later. Audio never leaves this Mac.</string>
     <key>NSAudioCaptureUsageDescription</key>
