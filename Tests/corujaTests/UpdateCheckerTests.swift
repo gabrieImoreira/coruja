@@ -2,6 +2,11 @@ import XCTest
 @testable import coruja
 
 final class UpdateCheckerTests: XCTestCase {
+    override func tearDown() {
+        MockURLProtocol.handler = nil
+        super.tearDown()
+    }
+
     private func releasePayload(tag: String) -> Data {
         let payload: [String: Any] = [
             "tag_name": tag,

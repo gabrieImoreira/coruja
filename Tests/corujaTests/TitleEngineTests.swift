@@ -2,6 +2,11 @@ import XCTest
 @testable import coruja
 
 final class TitleEngineTests: XCTestCase {
+    override func tearDown() {
+        MockURLProtocol.handler = nil
+        super.tearDown()
+    }
+
     private func openAIResponse(content: String) -> Data {
         let payload: [String: Any] = ["choices": [["message": ["content": content]]]]
         return try! JSONSerialization.data(withJSONObject: payload)

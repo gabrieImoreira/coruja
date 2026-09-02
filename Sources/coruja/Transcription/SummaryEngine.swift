@@ -63,7 +63,7 @@ enum SummaryEngine {
         }
     }
 
-    private static let endpoint = URL(string: "https://api.openai.com/v1/chat/completions")!
+    static let endpoint = URL(string: "https://api.openai.com/v1/chat/completions")!
 
     /// - Parameters:
     ///   - segments: transcript segments in chronological order.
@@ -118,6 +118,28 @@ enum SummaryEngine {
         }
 
         return Summary(resumo: finalSummary, itensDeAcao: actionItems)
+    }
+
+    /// Renders a `Summary` as the Markdown written to `summary.md` (or
+    /// `summary-test.md` for the `Summarize` CLI command): a document-level
+    /// heading (which depends on `type`), the model's own `resumo` body
+    /// (already containing its own Markdown sub-headings — see
+    /// `summarizeChunk`'s shape instructions), and, if any, an action-items
+    /// section.
+    static func render(_ summary: Summary, type: SummaryType) -> String {
+        let heading = type == .ata ? "# Ata da reunião" : "# Resumo"
+        var lines = [heading, "", summary.resumo, ""]
+        if !summary.itensDeAcao.isEmpty {
+            lines.append("## Itens de ação")
+            lines.append("")
+            for item in summary.itensDeAcao {
+                var line = "- \(item.item)"
+                if let responsavel = item.responsavel { line += " — **\(responsavel)**" }
+                if let prazo = item.prazo { line += " (prazo: \(prazo))" }
+                lines.append(line)
+            }
+        }
+        return lines.joined(separator: "\n")
     }
 
     private static let extractionRules = """

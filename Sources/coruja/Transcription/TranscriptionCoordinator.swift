@@ -253,7 +253,7 @@ actor TranscriptionCoordinator {
                 model: Config.llmModel(),
                 summaryType: type
             )
-            try Self.renderedSummary(summary, type: type).write(
+            try SummaryEngine.render(summary, type: type).write(
                 to: dir.appendingPathComponent(Self.summaryMDFileName),
                 atomically: true, encoding: .utf8
             )
@@ -288,26 +288,6 @@ actor TranscriptionCoordinator {
         } catch {
             log(dir, "title skipped: \(error)")
         }
-    }
-
-    /// `summary.resumo` already contains its own Markdown sub-headings
-    /// (## Tópicos / ### <topic> for `.topicos`, ## Pauta / ## Decisões for
-    /// `.ata`) — this just adds the document-level H1 and, if any, the
-    /// action items section.
-    private static func renderedSummary(_ summary: SummaryEngine.Summary, type: SummaryEngine.SummaryType) -> String {
-        let heading = type == .ata ? "# Ata da reunião" : "# Resumo"
-        var lines = [heading, "", summary.resumo, ""]
-        if !summary.itensDeAcao.isEmpty {
-            lines.append("## Itens de ação")
-            lines.append("")
-            for item in summary.itensDeAcao {
-                var line = "- \(item.item)"
-                if let responsavel = item.responsavel { line += " — **\(responsavel)**" }
-                if let prazo = item.prazo { line += " (prazo: \(prazo))" }
-                lines.append(line)
-            }
-        }
-        return lines.joined(separator: "\n")
     }
 
     private func preparedEngine() async throws -> TranscriptionEngine {

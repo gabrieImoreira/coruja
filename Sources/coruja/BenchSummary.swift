@@ -56,19 +56,7 @@ struct Summarize: ParsableCommand {
             summaryType: type
         )
 
-        let heading = type == .ata ? "# Ata da reunião" : "# Resumo"
-        var lines = [heading, "", summary.resumo, ""]
-        if !summary.itensDeAcao.isEmpty {
-            lines.append("## Itens de ação")
-            lines.append("")
-            for item in summary.itensDeAcao {
-                var line = "- \(item.item)"
-                if let r = item.responsavel { line += " — **\(r)**" }
-                if let p = item.prazo { line += " (prazo: \(p))" }
-                lines.append(line)
-            }
-        }
-        let rendered = lines.joined(separator: "\n")
+        let rendered = SummaryEngine.render(summary, type: type)
         try rendered.write(to: dir.appendingPathComponent("summary-test.md"), atomically: true, encoding: .utf8)
         FileHandle.standardError.write(Data("wrote \(dir.appendingPathComponent("summary-test.md").path)\n".utf8))
         print(rendered)

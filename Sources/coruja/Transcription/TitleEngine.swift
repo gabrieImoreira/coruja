@@ -171,7 +171,7 @@ enum TitleEngine {
         assunto principal desta reunião, baseado nas palavras-chave acima. \
         Responda APENAS o título, sem aspas, sem explicação.
         """
-        var request = URLRequest(url: URL(string: "https://api.openai.com/v1/chat/completions")!)
+        var request = URLRequest(url: SummaryEngine.endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")

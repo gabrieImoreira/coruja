@@ -7,6 +7,11 @@ import XCTest
 nonisolated(unsafe) private var multiChunkCallCount = 0
 
 final class SummaryEngineTests: XCTestCase {
+    override func tearDown() {
+        MockURLProtocol.handler = nil
+        super.tearDown()
+    }
+
     private func openAIResponse(content: String) -> Data {
         let payload: [String: Any] = [
             "choices": [["message": ["content": content]]]
