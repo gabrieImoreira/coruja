@@ -1,8 +1,9 @@
 #!/usr/bin/env swift
 // Generates Packaging/AppIcon.iconset (all required sizes): the "Clássica"
-// owl mark — black silhouette, white eye-mask, black pupils, on a white
-// rounded-square background — matching the app's light-menu-bar glyph.
-// Run once; `iconutil` turns the .iconset into .icns
+// owl mark — white silhouette, black eye-mask, white pupils, on a solid
+// black rounded-square background (same idea as ChatGPT's icon: one flat
+// dark tile, not a two-tone card like the menu bar's light-background
+// glyph). Run once; `iconutil` turns the .iconset into .icns
 // (`iconutil -c icns Packaging/AppIcon.iconset -o Packaging/AppIcon.icns`).
 import AppKit
 
@@ -59,11 +60,8 @@ func render(px: Int) -> NSBitmapImageRep {
     let full = NSRect(x: 0, y: 0, width: px, height: px)
     let corner = CGFloat(px) * 0.22
     let bg = NSBezierPath(roundedRect: full, xRadius: corner, yRadius: corner)
-    NSColor.white.setFill()
+    NSColor(calibratedWhite: 0.07, alpha: 1.0).setFill()
     bg.fill()
-    NSColor(calibratedWhite: 0.85, alpha: 1.0).setStroke()
-    bg.lineWidth = CGFloat(px) * 0.006
-    bg.stroke()
 
     // Map the owl's 64x64 SVG-style space (origin top-left, y down) onto a
     // centered, padded square within the icon canvas.
@@ -74,14 +72,15 @@ func render(px: Int) -> NSBitmapImageRep {
     ctx.cgContext.translateBy(x: margin, y: CGFloat(px) - margin)
     ctx.cgContext.scaleBy(x: scale, y: -scale)
 
-    let ink = NSColor(calibratedWhite: 0.11, alpha: 1.0)
+    let ink = NSColor.white
+    let bgColor = NSColor(calibratedWhite: 0.07, alpha: 1.0)
 
     ink.setFill()
     owlOutline().fill()
     rotatedEllipse(cx: 19, cy: 9, rx: 4.2, ry: 7.5, degrees: -24).fill()
     rotatedEllipse(cx: 45, cy: 9, rx: 4.2, ry: 7.5, degrees: 24).fill()
 
-    NSColor.white.setFill()
+    bgColor.setFill()
     NSBezierPath(ovalIn: NSRect(x: 25 - 10, y: 28 - 10, width: 20, height: 20)).fill()
     NSBezierPath(ovalIn: NSRect(x: 39 - 10, y: 28 - 10, width: 20, height: 20)).fill()
 
