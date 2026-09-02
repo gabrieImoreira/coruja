@@ -126,7 +126,7 @@ final class AppController: NSObject {
     private var localHotkeyMonitor: Any?
 
     private let meetingDetector = MeetingDetector()
-    private let meetingPrompt = MeetingPromptWindow()
+    private let meetingPrompt = NotificationPanel()
     private var meetingPollTimer: Timer?
     /// Set when a recording was started from the meeting prompt, to the URL
     /// that triggered it. Only a meeting ending that matches this URL
@@ -186,8 +186,11 @@ final class AppController: NSObject {
     private func handleMeetingDetected(_ url: String) {
         guard session == nil else { return } // already recording something
         meetingPrompt.show(
-            message: "Reunião detectada no Chrome.\nGravar com a coruja?",
+            icon: "video.fill",
+            title: "Reunião detectada",
+            message: "Gravar com a coruja?",
             actionTitle: "Gravar",
+            position: .topRight(of: nil),
             onAction: { [weak self] in
                 self?.meetingRecordingURL = url
                 self?.startSession()
@@ -199,14 +202,22 @@ final class AppController: NSObject {
     /// Only for a recording coruja itself started via the meeting-detected
     /// prompt above (see meetingRecordingURL) — a manually started recording
     /// is never touched by a Chrome tab closing, same rule as before this
-    /// existed, just surfaced now instead of silently auto-stopping.
+    /// existed, just surfaced now instead of silently auto-stopping. Brings
+    /// the app forward first (openNotes()) — unlike the "meeting detected"
+    /// prompt, which never steals focus from the meeting window, "your
+    /// meeting just ended" is exactly the moment the user is meant to look
+    /// at coruja.
     private func handleMeetingEnded(_ url: String) {
         guard meetingRecordingURL == url, session != nil else { return }
         meetingRecordingURL = nil
+        openNotes()
         meetingPrompt.show(
-            message: "A reunião parece ter terminado.\nParar a gravação?",
+            icon: "stop.circle",
+            title: "Reunião encerrada",
+            message: "Parar a gravação?",
             actionTitle: "Parar",
             ignoreTitle: "Continuar",
+            position: .topRight(of: notesWindow?.window),
             onAction: { [weak self] in self?.stopSession() },
             onIgnore: {}
         )
