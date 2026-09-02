@@ -18,12 +18,11 @@ struct SettingsRootView: View {
     @State private var language = "pt"
     @State private var micVoiceProcessing = false
     @State private var llmPassEnabled = false
-    @State private var llmModel = "llama3.1:8b"
-    @State private var ollamaStatus: OllamaStatus = .checking
-
-    private enum OllamaStatus {
-        case checking, ok, notRunning, modelMissing
-    }
+    @State private var llmModel = "gpt-4o-mini"
+    @State private var summaryType = "topicos"
+    @State private var apiKeyDraft = ""
+    @State private var hasStoredAPIKey = false
+    @State private var apiKeySaveError: String?
 
     private var theme: Theme { Theme(isDark: isDarkMode) }
 
@@ -88,14 +87,55 @@ struct SettingsRootView: View {
 
                 section("Resumo e título automático") {
                     toggleRow(
-                        "Gerar resumo, itens de ação e título com IA local",
-                        detail: "Requer Ollama rodando na máquina (\"ollama serve\", com o modelo já baixado). Nada sai do computador — sem isso ligado, a coruja só transcreve.",
+                        "Gerar resumo, itens de ação e título com OpenAI",
+                        detail: "A transcrição desta reunião é enviada à OpenAI para gerar o texto — isso sai da regra normal da coruja de nada sair do computador. Sem isso ligado, a coruja só transcreve.",
                         isOn: $llmPassEnabled
                     )
 
                     if llmPassEnabled {
-                        labeledRow("Modelo Ollama") {
-                            TextField("llama3.1:8b", text: $llmModel)
+                        labeledRow("Chave da API OpenAI") {
+                            HStack(spacing: 8) {
+                                SecureField(hasStoredAPIKey ? "•••••••••••• (chave salva)" : "sk-...", text: $apiKeyDraft)
+                                    .textFieldStyle(.plain)
+                                    .font(.system(size: 12.5))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 6)
+                                    .background(theme.playerCardBg, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(theme.border))
+                                    .onSubmit(saveAPIKey)
+                                Button("Salvar", action: saveAPIKey)
+                                    .buttonStyle(.plain)
+                                    .font(.system(size: 12))
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(theme.playerCardBg, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(theme.border))
+                                    .disabled(apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            }
+                            HStack(spacing: 6) {
+                                Circle().fill(hasStoredAPIKey ? Color.green : Color.orange).frame(width: 6, height: 6)
+                                Text(hasStoredAPIKey ? "Chave configurada" : "Nenhuma chave configurada")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(theme.metaColor)
+                            }
+                            if let apiKeySaveError {
+                                Text(apiKeySaveError)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.red)
+                            }
+                        }
+
+                        labeledRow("Tipo de documento") {
+                            Picker("", selection: $summaryType) {
+                                Text("Resumo detalhado por tópico").tag("topicos")
+                                Text("Ata da reunião").tag("ata")
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.radioGroup)
+                        }
+
+                        labeledRow("Modelo OpenAI") {
+                            TextField("gpt-4o-mini", text: $llmModel)
                                 .textFieldStyle(.plain)
                                 .font(.system(size: 12.5))
                                 .padding(.horizontal, 8)
@@ -103,9 +143,8 @@ struct SettingsRootView: View {
                                 .background(theme.playerCardBg, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
                                 .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(theme.border))
                                 .frame(maxWidth: 220)
-                                .onSubmit { save(); checkOllama() }
+                                .onSubmit(save)
                         }
-                        ollamaStatusRow
                     }
                 }
             }
@@ -117,91 +156,13 @@ struct SettingsRootView: View {
         // Monochrome, same as the rest of the app — native Toggle/Picker
         // default to the system accent color (blue) otherwise.
         .tint(theme.rowTitleColor)
-        .onAppear {
-            load()
-            if llmPassEnabled { checkOllama() }
-        }
+        .onAppear(perform: load)
         .onChange(of: transcriptionEnabled) { _, _ in save() }
         .onChange(of: engine) { _, _ in save() }
         .onChange(of: language) { _, _ in save() }
         .onChange(of: micVoiceProcessing) { _, _ in save() }
-        .onChange(of: llmPassEnabled) { _, enabled in
-            save()
-            if enabled { checkOllama() }
-        }
-    }
-
-    // MARK: - Ollama status
-
-    private var ollamaStatusRow: some View {
-        HStack(spacing: 7) {
-            switch ollamaStatus {
-            case .checking:
-                ProgressView().controlSize(.mini)
-                Text("Verificando Ollama…")
-                    .font(.system(size: 11))
-                    .foregroundStyle(theme.metaColor)
-            case .ok:
-                Circle().fill(Color.green).frame(width: 6, height: 6)
-                Text("Ollama rodando, modelo pronto")
-                    .font(.system(size: 11))
-                    .foregroundStyle(theme.metaColor)
-            case .notRunning:
-                Circle().fill(Color.red).frame(width: 6, height: 6)
-                Text("Ollama não encontrado — rode \"ollama serve\" no Terminal")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.red)
-            case .modelMissing:
-                Circle().fill(Color.orange).frame(width: 6, height: 6)
-                Text("Ollama rodando, mas falta baixar o modelo — rode \"ollama pull \(llmModel)\"")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.orange)
-            }
-            Spacer()
-            Button(action: checkOllama) {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(theme.metaColor)
-            }
-            .buttonStyle(.plain)
-            .help("Checar de novo")
-        }
-        .padding(.top, 2)
-    }
-
-    /// Hits Ollama's own /api/tags — cheap, no model load, and its response
-    /// already lists what's pulled, so one request answers both "is Ollama
-    /// running" and "is this specific model available" instead of needing
-    /// a second round-trip.
-    private func checkOllama() {
-        ollamaStatus = .checking
-        let endpoint = Config.llmEndpoint()
-        let model = llmModel
-        Task {
-            let status = await Self.probeOllama(endpoint: endpoint, model: model)
-            await MainActor.run { ollamaStatus = status }
-        }
-    }
-
-    private static func probeOllama(endpoint: URL, model: String) async -> OllamaStatus {
-        var request = URLRequest(url: endpoint.appendingPathComponent("api/tags"))
-        request.timeoutInterval = 4
-        guard let (data, response) = try? await URLSession.shared.data(for: request),
-              let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode)
-        else {
-            return .notRunning
-        }
-        struct TagsResponse: Decodable {
-            struct Model: Decodable { let name: String }
-            let models: [Model]
-        }
-        // An unparseable response still means Ollama answered — don't false-
-        // alarm on the model check if the schema ever shifts.
-        guard let tags = try? JSONDecoder().decode(TagsResponse.self, from: data) else {
-            return .ok
-        }
-        let hasModel = tags.models.contains { $0.name == model || $0.name.hasPrefix("\(model):") }
-        return hasModel ? .ok : .modelMissing
+        .onChange(of: llmPassEnabled) { _, _ in save() }
+        .onChange(of: summaryType) { _, _ in save() }
     }
 
     // MARK: - Sections
@@ -258,6 +219,8 @@ struct SettingsRootView: View {
         micVoiceProcessing = Config.micVoiceProcessing()
         llmPassEnabled = Config.llmPassEnabled()
         llmModel = Config.llmModel()
+        summaryType = Config.summaryType()
+        hasStoredAPIKey = OpenAIKeychain.get() != nil
     }
 
     private func save() {
@@ -268,8 +231,22 @@ struct SettingsRootView: View {
             transcriptionLanguage: language,
             llmPassEnabled: llmPassEnabled,
             llmModel: llmModel,
+            summaryType: summaryType,
             micVoiceProcessing: micVoiceProcessing
         )
+    }
+
+    private func saveAPIKey() {
+        let trimmed = apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        do {
+            try OpenAIKeychain.set(trimmed)
+            apiKeyDraft = ""
+            hasStoredAPIKey = true
+            apiKeySaveError = nil
+        } catch {
+            apiKeySaveError = "\(error)"
+        }
     }
 
     private func chooseFolder() {
