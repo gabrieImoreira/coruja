@@ -28,6 +28,13 @@ struct NotesRootView: View {
     @State private var titleDraft = ""
     @StateObject private var player = AudioPlayerModel()
 
+    private enum DetailTab { case transcript, summary }
+    @State private var detailTab: DetailTab = .transcript
+    @State private var summaryTypeShown: SummaryEngine.SummaryType = .topicos
+    @State private var summaryContent: [SummaryEngine.SummaryType: String] = [:]
+    @State private var summaryGenerating: SummaryEngine.SummaryType?
+    @State private var summaryError: String?
+
     private var theme: Theme { Theme(isDark: isDarkMode) }
 
     var body: some View {
@@ -322,9 +329,18 @@ struct NotesRootView: View {
                                     .padding(.top, 4)
                             }
 
-                            transcriptBody
-                                .padding(.top, 26)
-                                .padding(.bottom, 24)
+                            detailTabPicker
+                                .padding(.top, 22)
+                                .padding(.bottom, 18)
+
+                            Group {
+                                if detailTab == .transcript {
+                                    transcriptBody
+                                } else {
+                                    summaryBody(for: session)
+                                }
+                            }
+                            .padding(.bottom, 24)
                         }
                         .frame(maxWidth: 640, alignment: .leading)
                         .padding(.horizontal, 28)
@@ -469,6 +485,133 @@ struct NotesRootView: View {
         }
     }
 
+    // MARK: - Summary / ata
+
+    private var detailTabPicker: some View {
+        Picker("", selection: $detailTab) {
+            Text("Transcrição").tag(DetailTab.transcript)
+            Text("Resumo").tag(DetailTab.summary)
+        }
+        .labelsHidden()
+        .pickerStyle(.segmented)
+        .frame(maxWidth: 280)
+        .tint(theme.rowTitleColor)
+    }
+
+    private func summaryBody(for session: SessionEntry) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Picker("", selection: $summaryTypeShown) {
+                Text("Resumo por tópico").tag(SummaryEngine.SummaryType.topicos)
+                Text("Ata da reunião").tag(SummaryEngine.SummaryType.ata)
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 280)
+            .tint(theme.rowTitleColor)
+
+            summaryContentView(for: session)
+        }
+    }
+
+    @ViewBuilder
+    private func summaryContentView(for session: SessionEntry) -> some View {
+        let type = summaryTypeShown
+        if let content = summaryContent[type] {
+            renderedSummary(content)
+        } else if summaryGenerating == type {
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("Gerando \(type == .ata ? "ata" : "resumo")…")
+                    .font(.system(size: 13))
+                    .foregroundStyle(theme.metaColor)
+            }
+        } else if !session.hasTranscript {
+            Text("Disponível assim que a transcrição desta reunião terminar.")
+                .font(.system(size: 13))
+                .italic()
+                .foregroundStyle(theme.fallbackColor)
+        } else if Config.openaiApiKey() == nil {
+            Text("Configure uma chave da OpenAI em Configurações para gerar resumo ou ata.")
+                .font(.system(size: 13))
+                .italic()
+                .foregroundStyle(theme.fallbackColor)
+        } else {
+            VStack(alignment: .leading, spacing: 10) {
+                // Only the type chosen in Configurações é gerado sozinho ao
+                // transcrever — o outro fica disponível aqui, sob demanda,
+                // sem precisar ligar/desligar a configuração pra cada reunião.
+                Text("Ainda não gerado automaticamente para esta reunião.")
+                    .font(.system(size: 13))
+                    .italic()
+                    .foregroundStyle(theme.fallbackColor)
+                if let summaryError, summaryGenerating == nil {
+                    Text(summaryError)
+                        .font(.system(size: 12))
+                        .foregroundStyle(theme.deleteColor)
+                }
+                Button("Gerar \(type == .ata ? "ata" : "resumo por tópico")") {
+                    generateSummary(type, for: session)
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 12.5, weight: .medium))
+                .foregroundStyle(theme.rowTitleColor)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(theme.actionBtnBg, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(theme.border))
+            }
+        }
+    }
+
+    /// Minimal line-based Markdown rendering — `SummaryEngine.render`'s
+    /// output only ever uses `#`/`##` headings, `- ` bullets, and plain
+    /// paragraphs, so a full Markdown parser would be more than this needs.
+    private func renderedSummary(_ text: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(Array(text.split(separator: "\n", omittingEmptySubsequences: false).enumerated()), id: \.offset) { _, rawLine in
+                let line = String(rawLine)
+                if line.hasPrefix("## ") {
+                    Text(line.dropFirst(3))
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(theme.headerTitleColor)
+                        .padding(.top, 6)
+                } else if line.hasPrefix("# ") {
+                    Text(line.dropFirst(2))
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(theme.headerTitleColor)
+                } else if line.hasPrefix("- ") {
+                    HStack(alignment: .top, spacing: 6) {
+                        Text("•").foregroundStyle(theme.metaColor)
+                        Text(line.dropFirst(2))
+                            .font(.system(size: 14))
+                            .foregroundStyle(theme.bodyColor)
+                    }
+                } else if !line.trimmingCharacters(in: .whitespaces).isEmpty {
+                    Text(line)
+                        .font(.system(size: 14))
+                        .lineSpacing(4)
+                        .foregroundStyle(theme.bodyColor)
+                }
+            }
+        }
+        .textSelection(.enabled)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func generateSummary(_ type: SummaryEngine.SummaryType, for session: SessionEntry) {
+        summaryGenerating = type
+        summaryError = nil
+        Task {
+            do {
+                let rendered = try await SummaryOnDemand.generate(for: session.id, type: type)
+                summaryContent[type] = rendered
+            } catch {
+                summaryError = "\(error)"
+            }
+            summaryGenerating = nil
+        }
+    }
+
     private var emptyState: some View {
         VStack(spacing: 8) {
             Image(systemName: "waveform")
@@ -548,6 +691,23 @@ struct NotesRootView: View {
         } else {
             player.stop()
         }
+
+        summaryError = nil
+        summaryGenerating = nil
+        summaryContent = [:]
+        for type: SummaryEngine.SummaryType in [.topicos, .ata] {
+            let url = session.id.appendingPathComponent(TranscriptionCoordinator.summaryFileName(for: type))
+            if let content = try? String(contentsOf: url, encoding: .utf8) {
+                summaryContent[type] = content
+            }
+        }
+        // Show whichever type already has content — the one Configurações
+        // auto-generates for new sessions, or whichever was requested on
+        // demand for older ones — falling back to the configured default
+        // when the reunião has neither yet.
+        summaryTypeShown = summaryContent[.topicos] != nil ? .topicos
+            : summaryContent[.ata] != nil ? .ata
+            : SummaryEngine.SummaryType(rawValue: Config.summaryType()) ?? .topicos
     }
 
     private func delete(_ session: SessionEntry) {

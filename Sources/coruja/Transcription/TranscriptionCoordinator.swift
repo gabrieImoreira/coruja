@@ -13,7 +13,20 @@ import Foundation
 actor TranscriptionCoordinator {
     static let transcriptJSONFileName = ".transcript.json"
     static let transcriptMDFileName = "transcript.md"
+    /// Historical single-file name from before the two summary types
+    /// (ata/topicos) could coexist — no longer written, kept only so an old
+    /// session's file isn't orphaned/unexplained.
     static let summaryMDFileName = "summary.md"
+
+    /// One file per document type, so a session can hold both the
+    /// auto-generated type and one requested on demand later (see
+    /// SummaryOnDemand) side by side instead of overwriting each other.
+    static func summaryFileName(for type: SummaryEngine.SummaryType) -> String {
+        switch type {
+        case .topicos: return "summary-topicos.md"
+        case .ata: return "summary-ata.md"
+        }
+    }
     static let audioFileName = "audio.m4a"
     static let logFileName = ".transcribe.log"
 
@@ -254,7 +267,7 @@ actor TranscriptionCoordinator {
                 summaryType: type
             )
             try SummaryEngine.render(summary, type: type).write(
-                to: dir.appendingPathComponent(Self.summaryMDFileName),
+                to: dir.appendingPathComponent(Self.summaryFileName(for: type)),
                 atomically: true, encoding: .utf8
             )
             log(dir, "summary written (\(type.rawValue)) — \(summary.itensDeAcao.count) action item(s)")

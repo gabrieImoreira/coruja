@@ -21,6 +21,7 @@ struct SettingsRootView: View {
     @State private var modelChoice = "gpt-5.6-terra" // one of Self.knownModels' ids
     @State private var summaryType = "topicos"
     @State private var apiKey = ""
+    @State private var apiKeySaved = false
     @State private var updateCheckState: UpdateCheckState = .idle
 
     private enum UpdateCheckState {
@@ -103,15 +104,25 @@ struct SettingsRootView: View {
 
                     if llmPassEnabled {
                         labeledRow("Chave da API OpenAI") {
-                            SecureField("sk-...", text: $apiKey)
-                                .textFieldStyle(.plain)
-                                .font(.system(size: 12.5))
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 6)
-                                .background(theme.playerCardBg, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                                .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(theme.border))
-                                .frame(maxWidth: 320)
-                                .onSubmit(save)
+                            HStack(spacing: 8) {
+                                SecureField("sk-...", text: $apiKey)
+                                    .textFieldStyle(.plain)
+                                    .font(.system(size: 12.5))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 6)
+                                    .background(theme.playerCardBg, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(theme.border))
+                                    .frame(maxWidth: 260)
+                                    .onSubmit(saveAPIKey)
+                                Button(apiKeySaved ? "Salvo" : "Salvar", action: saveAPIKey)
+                                    .buttonStyle(.plain)
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(apiKeySaved ? theme.metaColor : theme.rowTitleColor)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(theme.playerCardBg, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(theme.border))
+                            }
                             Text("Guardada em ~/.config/coruja/config.json, em texto puro — como o resto das configurações da coruja.")
                                 .font(.system(size: 10.5))
                                 .foregroundStyle(theme.metaColor)
@@ -164,7 +175,7 @@ struct SettingsRootView: View {
         .onChange(of: llmPassEnabled) { _, _ in save() }
         .onChange(of: modelChoice) { _, _ in save() }
         .onChange(of: summaryType) { _, _ in save() }
-        .onChange(of: apiKey) { _, _ in save() }
+        .onChange(of: apiKey) { _, _ in apiKeySaved = false }
     }
 
     // MARK: - Sections
@@ -265,6 +276,7 @@ struct SettingsRootView: View {
         modelChoice = Self.knownModels.contains(where: { $0.id == storedModel }) ? storedModel : "gpt-5.6-terra"
         summaryType = Config.summaryType()
         apiKey = Config.openaiApiKey() ?? ""
+        apiKeySaved = !apiKey.isEmpty
     }
 
     private func save() {
@@ -279,6 +291,11 @@ struct SettingsRootView: View {
             summaryType: summaryType,
             micVoiceProcessing: micVoiceProcessing
         )
+    }
+
+    private func saveAPIKey() {
+        save()
+        apiKeySaved = true
     }
 
     private func chooseFolder() {
