@@ -204,10 +204,15 @@ final class AppController: NSObject {
         presentUpdatePrompt(info, onIgnore: { UpdateChecker.dismiss(info.version) })
     }
 
-    /// Shared by the automatic path and Settings' manual "Verificar
-    /// atualizações" button (see SettingsRootView) — not private, called
-    /// across the module.
+    /// Only called by the automatic update-check path (checkForUpdateAutomatically).
+    /// Brings the app forward first (openNotes()) — unlike the "meeting detected"
+    /// prompt, which never steals focus from the meeting window, "a new version is
+    /// available" is exactly the moment the user is meant to look at coruja. Also
+    /// ensures the popup's `.bottomRight(of: notesWindow?.window)` positioning always
+    /// has a real window to anchor to, rather than silently falling back to the
+    /// screen corner.
     func presentUpdatePrompt(_ info: UpdateInfo, onIgnore: @escaping () -> Void) {
+        openNotes()
         updatePrompt.show(
             icon: "arrow.down.circle",
             title: "Nova versão \(info.version) disponível",
