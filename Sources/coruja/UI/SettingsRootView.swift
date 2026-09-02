@@ -20,9 +20,7 @@ struct SettingsRootView: View {
     @State private var llmPassEnabled = false
     @State private var modelChoice = "gpt-5.6-terra" // one of Self.knownModels' ids
     @State private var summaryType = "topicos"
-    @State private var apiKeyDraft = ""
-    @State private var hasStoredAPIKey = false
-    @State private var apiKeySaveError: String?
+    @State private var apiKey = ""
     @State private var updateCheckState: UpdateCheckState = .idle
 
     private enum UpdateCheckState {
@@ -105,35 +103,18 @@ struct SettingsRootView: View {
 
                     if llmPassEnabled {
                         labeledRow("Chave da API OpenAI") {
-                            HStack(spacing: 8) {
-                                SecureField(hasStoredAPIKey ? "•••••••••••• (chave salva)" : "sk-...", text: $apiKeyDraft)
-                                    .textFieldStyle(.plain)
-                                    .font(.system(size: 12.5))
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 6)
-                                    .background(theme.playerCardBg, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(theme.border))
-                                    .onSubmit(saveAPIKey)
-                                Button("Salvar", action: saveAPIKey)
-                                    .buttonStyle(.plain)
-                                    .font(.system(size: 12))
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
-                                    .background(theme.playerCardBg, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(theme.border))
-                                    .disabled(apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                            }
-                            HStack(spacing: 6) {
-                                Circle().fill(hasStoredAPIKey ? Color.green : Color.orange).frame(width: 6, height: 6)
-                                Text(hasStoredAPIKey ? "Chave configurada" : "Nenhuma chave configurada")
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(theme.metaColor)
-                            }
-                            if let apiKeySaveError {
-                                Text(apiKeySaveError)
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(.red)
-                            }
+                            SecureField("sk-...", text: $apiKey)
+                                .textFieldStyle(.plain)
+                                .font(.system(size: 12.5))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 6)
+                                .background(theme.playerCardBg, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(theme.border))
+                                .frame(maxWidth: 320)
+                                .onSubmit(save)
+                            Text("Guardada em ~/.config/coruja/config.json, em texto puro — como o resto das configurações da coruja.")
+                                .font(.system(size: 10.5))
+                                .foregroundStyle(theme.metaColor)
                         }
 
                         labeledRow("Tipo de documento") {
@@ -282,7 +263,7 @@ struct SettingsRootView: View {
         let storedModel = Config.llmModel()
         modelChoice = Self.knownModels.contains(where: { $0.id == storedModel }) ? storedModel : "gpt-5.6-terra"
         summaryType = Config.summaryType()
-        hasStoredAPIKey = OpenAIKeychain.get() != nil
+        apiKey = Config.openaiApiKey() ?? ""
     }
 
     private func save() {
@@ -292,23 +273,11 @@ struct SettingsRootView: View {
             transcriptionEngine: engine,
             transcriptionLanguage: language,
             llmPassEnabled: llmPassEnabled,
+            openaiApiKey: apiKey,
             llmModel: modelChoice,
             summaryType: summaryType,
             micVoiceProcessing: micVoiceProcessing
         )
-    }
-
-    private func saveAPIKey() {
-        let trimmed = apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        do {
-            try OpenAIKeychain.set(trimmed)
-            apiKeyDraft = ""
-            hasStoredAPIKey = true
-            apiKeySaveError = nil
-        } catch {
-            apiKeySaveError = "\(error)"
-        }
     }
 
     private func chooseFolder() {

@@ -67,7 +67,7 @@ enum SummaryEngine {
 
     /// - Parameters:
     ///   - segments: transcript segments in chronological order.
-    ///   - apiKey: OpenAI API key (see OpenAIKeychain) — throws
+    ///   - apiKey: OpenAI API key (see Config.openaiApiKey) — throws
     ///     `.missingAPIKey` if empty.
     ///   - chunkMinutes: size of each map step. 10min keeps a real meeting's
     ///     worth of context small enough for the model to stay grounded in,

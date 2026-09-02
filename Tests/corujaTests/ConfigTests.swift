@@ -34,6 +34,7 @@ final class ConfigTests: XCTestCase {
             transcriptionEngine: "whisper",
             transcriptionLanguage: "pt",
             llmPassEnabled: true,
+            openaiApiKey: "",
             llmModel: "   ",
             summaryType: "topicos",
             micVoiceProcessing: false
@@ -48,6 +49,7 @@ final class ConfigTests: XCTestCase {
             transcriptionEngine: "whisper",
             transcriptionLanguage: "pt",
             llmPassEnabled: true,
+            openaiApiKey: "",
             llmModel: "gpt-4.1-mini",
             summaryType: "ata",
             micVoiceProcessing: false
@@ -63,10 +65,56 @@ final class ConfigTests: XCTestCase {
             transcriptionEngine: "whisper",
             transcriptionLanguage: "pt",
             llmPassEnabled: false,
+            openaiApiKey: "",
             llmModel: "gpt-5.6-sol",
             summaryType: "garbage",
             micVoiceProcessing: false
         )
         XCTAssertEqual(Config.summaryType(), "topicos")
+    }
+
+    func testOpenaiApiKeyDefaultsToNil() {
+        XCTAssertNil(Config.openaiApiKey())
+    }
+
+    func testSaveAndReloadOpenaiApiKey() {
+        Config.save(
+            recordingsDir: "",
+            transcriptionEnabled: true,
+            transcriptionEngine: "whisper",
+            transcriptionLanguage: "pt",
+            llmPassEnabled: true,
+            openaiApiKey: "sk-test-123",
+            llmModel: "gpt-5.6-terra",
+            summaryType: "topicos",
+            micVoiceProcessing: false
+        )
+        XCTAssertEqual(Config.openaiApiKey(), "sk-test-123")
+    }
+
+    func testSaveWithEmptyOpenaiApiKeyClearsIt() {
+        Config.save(
+            recordingsDir: "",
+            transcriptionEnabled: true,
+            transcriptionEngine: "whisper",
+            transcriptionLanguage: "pt",
+            llmPassEnabled: true,
+            openaiApiKey: "sk-test-123",
+            llmModel: "gpt-5.6-terra",
+            summaryType: "topicos",
+            micVoiceProcessing: false
+        )
+        Config.save(
+            recordingsDir: "",
+            transcriptionEnabled: true,
+            transcriptionEngine: "whisper",
+            transcriptionLanguage: "pt",
+            llmPassEnabled: true,
+            openaiApiKey: "",
+            llmModel: "gpt-5.6-terra",
+            summaryType: "topicos",
+            micVoiceProcessing: false
+        )
+        XCTAssertNil(Config.openaiApiKey())
     }
 }

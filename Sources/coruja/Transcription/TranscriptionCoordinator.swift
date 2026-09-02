@@ -238,7 +238,7 @@ actor TranscriptionCoordinator {
     /// otherwise ignored — the transcript is already written and is the
     /// thing that matters; the summary is a bonus.
     private func runSummary(for segments: [Transcript.Segment], in dir: URL) async {
-        guard let apiKey = OpenAIKeychain.get() else {
+        guard let apiKey = Config.openaiApiKey() else {
             log(dir, "summary skipped: no OpenAI API key configured")
             return
         }
@@ -267,7 +267,7 @@ actor TranscriptionCoordinator {
     /// key, not enough text, bad response) just leaves `.title` unwritten;
     /// the session falls back to showing its timestamp, same as today.
     private func runTitle(for segments: [Transcript.Segment], in dir: URL) async {
-        guard let apiKey = OpenAIKeychain.get() else {
+        guard let apiKey = Config.openaiApiKey() else {
             log(dir, "title skipped: no OpenAI API key configured")
             return
         }

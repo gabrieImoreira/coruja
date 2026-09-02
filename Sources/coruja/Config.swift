@@ -87,10 +87,20 @@ enum Config {
         transcription()?["llm_pass"] as? Bool ?? false
     }
 
-    /// OpenAI model tag (e.g. "gpt-5.6-terra"). Needs a valid API key in the
-    /// Keychain (see OpenAIKeychain) — this alone doesn't enable the pass.
+    /// OpenAI model tag (e.g. "gpt-5.6-terra"). Needs a valid API key (see
+    /// `openaiApiKey()`) — this alone doesn't enable the pass.
     static func llmModel() -> String {
         transcription()?["llm_model"] as? String ?? "gpt-5.6-terra"
+    }
+
+    /// OpenAI API key, stored in plain text like every other setting here —
+    /// NOT in the macOS Keychain. Ad-hoc code signing (no paid Apple Developer
+    /// certificate, see README) means Keychain access control ties to a code
+    /// signature that changes on every self-update, which would otherwise
+    /// re-prompt the user for Keychain permission on every single update.
+    static func openaiApiKey() -> String? {
+        let key = transcription()?["openai_api_key"] as? String
+        return (key?.isEmpty ?? true) ? nil : key
     }
 
     /// Which document shape the summary pass produces: "ata" (formal
@@ -120,6 +130,7 @@ enum Config {
         transcriptionEngine: String,
         transcriptionLanguage: String,
         llmPassEnabled: Bool,
+        openaiApiKey: String,
         llmModel: String,
         summaryType: String,
         micVoiceProcessing: Bool
@@ -135,6 +146,12 @@ enum Config {
         json["mic_voice_processing"] = micVoiceProcessing
 
         var t = json["transcription"] as? [String: Any] ?? [:]
+        let trimmedKey = openaiApiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedKey.isEmpty {
+            t.removeValue(forKey: "openai_api_key")
+        } else {
+            t["openai_api_key"] = trimmedKey
+        }
         t["enabled"] = transcriptionEnabled
         t["engine"] = transcriptionEngine
         t["language"] = transcriptionLanguage

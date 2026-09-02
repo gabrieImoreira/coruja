@@ -48,7 +48,7 @@ enum TitleEngine {
     ///   - root: recordings root, scanned for sibling sessions' `.transcript.json`
     ///     to build the TF-IDF corpus.
     ///   - own: this session's directory — excluded when scanning `root`.
-    ///   - apiKey: OpenAI API key (see OpenAIKeychain) — throws
+    ///   - apiKey: OpenAI API key (see Config.openaiApiKey) — throws
     ///     `.missingAPIKey` if empty.
     static func generate(
         segments: [(speaker: String, text: String)],

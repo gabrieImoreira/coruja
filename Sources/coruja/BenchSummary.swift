@@ -43,7 +43,7 @@ struct Summarize: ParsableCommand {
             SummaryEngine.TimedSegment(speaker: $0.speaker, text: $0.text, startMs: $0.start_ms)
         }
 
-        guard let apiKey = OpenAIKeychain.get() else {
+        guard let apiKey = Config.openaiApiKey() else {
             FileHandle.standardError.write(Data("no OpenAI API key configured (see Settings)\n".utf8))
             throw SummaryEngine.SummaryError.missingAPIKey
         }
