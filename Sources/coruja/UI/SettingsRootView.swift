@@ -164,6 +164,7 @@ struct SettingsRootView: View {
         .onChange(of: llmPassEnabled) { _, _ in save() }
         .onChange(of: modelChoice) { _, _ in save() }
         .onChange(of: summaryType) { _, _ in save() }
+        .onChange(of: apiKey) { _, _ in save() }
     }
 
     // MARK: - Sections

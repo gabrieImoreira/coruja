@@ -120,10 +120,10 @@ enum Config {
     }
 
     /// Overwrites every key the Settings UI knows about, preserving anything
-    /// else already in the file (`on_stop`, `transcription.llm_endpoint` —
-    /// power-user keys with no UI, only ever set by hand). Called with a full
-    /// snapshot of the UI's state on every change, not incrementally, since
-    /// that's simpler than per-field patch methods and this file is tiny.
+    /// else already in the file (`on_stop` — a power-user key with no UI,
+    /// only ever set by hand). Called with a full snapshot of the UI's state
+    /// on every change, not incrementally, since that's simpler than
+    /// per-field patch methods and this file is tiny.
     static func save(
         recordingsDir: String,
         transcriptionEnabled: Bool,
@@ -159,6 +159,7 @@ enum Config {
         let trimmedModel = llmModel.trimmingCharacters(in: .whitespacesAndNewlines)
         t["llm_model"] = trimmedModel.isEmpty ? "gpt-5.6-terra" : trimmedModel
         t["summary_type"] = summaryType == "ata" ? "ata" : "topicos"
+        t.removeValue(forKey: "llm_endpoint") // orphaned key from the removed Ollama config
         json["transcription"] = t
 
         let dir = path.deletingLastPathComponent()
@@ -167,6 +168,8 @@ enum Config {
             return
         }
         try? data.write(to: path, options: .atomic)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path.path)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dir.path)
     }
 
     /// Parse the config file. A malformed config is reported on stderr rather
