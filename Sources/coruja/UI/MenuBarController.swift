@@ -114,6 +114,10 @@ final class MenuBarController {
     /// bitmap version is confirmed working in the real menu bar. `.clear`
     /// compositing punches real alpha holes for the eyes, which is what
     /// `isTemplate` needs outside the owl shape.
+    ///
+    /// "Clássica" mark — same outline as `Packaging/AppIcon.icns` (see
+    /// `scripts/generate-icon.swift`), so the menu bar glyph and the Dock
+    /// icon are the same owl at two sizes, not two different drawings.
     private static func brandIcon() -> NSImage {
         let size = NSSize(width: 18, height: 18)
         let scale = 2 // one fixed backing resolution; AppKit downscales for @1x displays
@@ -131,29 +135,30 @@ final class MenuBarController {
 
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = ctx
-        ctx.cgContext.scaleBy(x: CGFloat(scale), y: CGFloat(scale))
+
+        // Map the owl's 64x64 SVG-style space (origin top-left, y down) onto
+        // this bottom-up pixel canvas — same transform trick as the icon
+        // generation script.
+        let canvas = CGFloat(pixelSize)
+        let contentSize = canvas * 0.94
+        let margin = (canvas - contentSize) / 2
+        let ownScale = contentSize / 64
+        ctx.cgContext.translateBy(x: margin, y: canvas - margin)
+        ctx.cgContext.scaleBy(x: ownScale, y: -ownScale)
 
         NSColor.black.setFill()
-        NSBezierPath(ovalIn: NSRect(x: 4.2, y: 5.6, width: 9.6, height: 9.6)).fill()
-
-        let earL = NSBezierPath()
-        earL.move(to: NSPoint(x: 5.4, y: 13.0))
-        earL.line(to: NSPoint(x: 4.3, y: 16.4))
-        earL.line(to: NSPoint(x: 7.2, y: 12.5))
-        earL.close()
-        earL.fill()
-
-        let earR = NSBezierPath()
-        earR.move(to: NSPoint(x: 12.6, y: 13.0))
-        earR.line(to: NSPoint(x: 13.7, y: 16.4))
-        earR.line(to: NSPoint(x: 10.8, y: 12.5))
-        earR.close()
-        earR.fill()
+        Self.owlOutline().fill()
+        Self.rotatedEllipse(cx: 19, cy: 9, rx: 4.2, ry: 7.5, degrees: -24).fill()
+        Self.rotatedEllipse(cx: 45, cy: 9, rx: 4.2, ry: 7.5, degrees: 24).fill()
 
         ctx.compositingOperation = .clear
-        NSBezierPath(ovalIn: NSRect(x: 6.0, y: 8.3, width: 2.6, height: 2.6)).fill()
-        NSBezierPath(ovalIn: NSRect(x: 9.4, y: 8.3, width: 2.6, height: 2.6)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 15, y: 18, width: 20, height: 20)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 29, y: 18, width: 20, height: 20)).fill()
         ctx.compositingOperation = .sourceOver
+
+        NSColor.black.setFill()
+        NSBezierPath(ovalIn: NSRect(x: 21.8, y: 24.8, width: 6.4, height: 6.4)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 35.8, y: 24.8, width: 6.4, height: 6.4)).fill()
 
         NSGraphicsContext.restoreGraphicsState()
 
@@ -161,6 +166,34 @@ final class MenuBarController {
         image.addRepresentation(rep)
         image.isTemplate = true
         return image
+    }
+
+    /// The owl's outline in a 64x64 SVG-style coordinate space (origin
+    /// top-left, y grows downward).
+    private static func owlOutline() -> NSBezierPath {
+        let path = NSBezierPath()
+        path.move(to: NSPoint(x: 32, y: 3))
+        path.curve(to: NSPoint(x: 21, y: 13), controlPoint1: NSPoint(x: 26, y: 3), controlPoint2: NSPoint(x: 23, y: 9))
+        path.curve(to: NSPoint(x: 6, y: 33), controlPoint1: NSPoint(x: 13, y: 15), controlPoint2: NSPoint(x: 6, y: 23))
+        path.curve(to: NSPoint(x: 20, y: 60), controlPoint1: NSPoint(x: 6, y: 46), controlPoint2: NSPoint(x: 12, y: 56))
+        path.line(to: NSPoint(x: 26, y: 52))
+        path.line(to: NSPoint(x: 32, y: 60))
+        path.line(to: NSPoint(x: 38, y: 52))
+        path.line(to: NSPoint(x: 44, y: 60))
+        path.curve(to: NSPoint(x: 58, y: 33), controlPoint1: NSPoint(x: 52, y: 56), controlPoint2: NSPoint(x: 58, y: 46))
+        path.curve(to: NSPoint(x: 43, y: 13), controlPoint1: NSPoint(x: 58, y: 23), controlPoint2: NSPoint(x: 51, y: 15))
+        path.curve(to: NSPoint(x: 32, y: 3), controlPoint1: NSPoint(x: 41, y: 9), controlPoint2: NSPoint(x: 38, y: 3))
+        path.close()
+        return path
+    }
+
+    private static func rotatedEllipse(cx: CGFloat, cy: CGFloat, rx: CGFloat, ry: CGFloat, degrees: CGFloat) -> NSBezierPath {
+        let oval = NSBezierPath(ovalIn: NSRect(x: -rx, y: -ry, width: rx * 2, height: ry * 2))
+        var transform = AffineTransform.identity
+        transform.translate(x: cx, y: cy)
+        transform.rotate(byDegrees: degrees)
+        oval.transform(using: transform)
+        return oval
     }
 
     @objc private func toggleClicked() { onToggle?() }
