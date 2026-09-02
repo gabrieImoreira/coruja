@@ -128,6 +128,9 @@ final class AppController: NSObject {
     private let meetingDetector = MeetingDetector()
     private let meetingPrompt = NotificationPanel()
     private var meetingPollTimer: Timer?
+    private let updatePrompt = NotificationPanel()
+    private var updateCheckTimer: Timer?
+    private static let updateCheckInterval: TimeInterval = 86400
     /// Set when a recording was started from the meeting prompt, to the URL
     /// that triggered it. Only a meeting ending that matches this URL
     /// auto-stops — a manually started recording is never auto-stopped by
@@ -149,6 +152,7 @@ final class AppController: NSObject {
         menuBar.update(recording: false, elapsed: nil)
         installHotkey()
         setupMeetingDetector()
+        scheduleUpdateChecks()
 
         Task { [transcription, root] in
             await transcription.setStatusHandler { status in
@@ -180,6 +184,50 @@ final class AppController: NSObject {
         // has no run loop pumping it and silently never fires.
         meetingPollTimer = Timer.scheduledTimer(withTimeInterval: MeetingDetector.pollInterval, repeats: true) { [weak self] _ in
             Task { [weak self] in await self?.meetingDetector.poll() }
+        }
+    }
+
+    /// Checks GitHub Releases once at launch and every 24h thereafter (see
+    /// UpdateChecker). The automatic path never re-prompts for a version the
+    /// user already dismissed — the manual "Verificar atualizações" button
+    /// in Settings bypasses that and always checks live.
+    private func scheduleUpdateChecks() {
+        Task { await checkForUpdateAutomatically() }
+        updateCheckTimer = Timer.scheduledTimer(withTimeInterval: Self.updateCheckInterval, repeats: true) { [weak self] _ in
+            Task { await self?.checkForUpdateAutomatically() }
+        }
+    }
+
+    private func checkForUpdateAutomatically() async {
+        guard let info = await UpdateChecker.checkForUpdate() else { return }
+        guard !UpdateChecker.isDismissed(info.version) else { return }
+        presentUpdatePrompt(info, onIgnore: { UpdateChecker.dismiss(info.version) })
+    }
+
+    /// Shared by the automatic path and Settings' manual "Verificar
+    /// atualizações" button (see SettingsRootView) — not private, called
+    /// across the module.
+    func presentUpdatePrompt(_ info: UpdateInfo, onIgnore: @escaping () -> Void) {
+        updatePrompt.show(
+            icon: "arrow.down.circle",
+            title: "Nova versão \(info.version) disponível",
+            message: "Atualizar agora?",
+            actionTitle: "Atualizar",
+            ignoreTitle: "Depois",
+            position: .bottomRightOfScreen,
+            autoDismiss: nil,
+            onAction: { [weak self] in self?.performUpdate(info) },
+            onIgnore: onIgnore
+        )
+    }
+
+    private func performUpdate(_ info: UpdateInfo) {
+        Task {
+            do {
+                try await UpdateInstaller.install(info)
+            } catch {
+                notifyUser(title: "Falha ao atualizar", body: "\(error)")
+            }
         }
     }
 
@@ -266,6 +314,7 @@ final class AppController: NSObject {
         if let globalHotkeyMonitor { NSEvent.removeMonitor(globalHotkeyMonitor) }
         if let localHotkeyMonitor { NSEvent.removeMonitor(localHotkeyMonitor) }
         meetingPollTimer?.invalidate()
+        updateCheckTimer?.invalidate()
     }
 
     private func toggle() {
