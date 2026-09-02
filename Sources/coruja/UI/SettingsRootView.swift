@@ -18,7 +18,8 @@ struct SettingsRootView: View {
     @State private var language = "pt"
     @State private var micVoiceProcessing = false
     @State private var llmPassEnabled = false
-    @State private var llmModel = "gpt-4o-mini"
+    @State private var modelChoice = "gpt-5.6-terra" // one of Self.knownModels' ids, or "outro"
+    @State private var customModel = ""
     @State private var summaryType = "topicos"
     @State private var apiKeyDraft = ""
     @State private var hasStoredAPIKey = false
@@ -28,6 +29,12 @@ struct SettingsRootView: View {
     private enum UpdateCheckState {
         case idle, checking, upToDate, available(UpdateInfo), installing, failed(String)
     }
+
+    private static let knownModels: [(id: String, label: String)] = [
+        ("gpt-5.6-terra", "gpt-5.6-terra (padrão — equilíbrio)"),
+        ("gpt-5.6-sol", "gpt-5.6-sol (mais capaz)"),
+        ("gpt-5.6-luna", "gpt-5.6-luna (mais barato)"),
+    ]
 
     private var theme: Theme { Theme(isDark: isDarkMode) }
 
@@ -140,15 +147,26 @@ struct SettingsRootView: View {
                         }
 
                         labeledRow("Modelo OpenAI") {
-                            TextField("gpt-4o-mini", text: $llmModel)
-                                .textFieldStyle(.plain)
-                                .font(.system(size: 12.5))
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 6)
-                                .background(theme.playerCardBg, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                                .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(theme.border))
-                                .frame(maxWidth: 220)
-                                .onSubmit(save)
+                            Picker("", selection: $modelChoice) {
+                                ForEach(Self.knownModels, id: \.id) { model in
+                                    Text(model.label).tag(model.id)
+                                }
+                                Text("Outro").tag("outro")
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.radioGroup)
+
+                            if modelChoice == "outro" {
+                                TextField("modelo", text: $customModel)
+                                    .textFieldStyle(.plain)
+                                    .font(.system(size: 12.5))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 6)
+                                    .background(theme.playerCardBg, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(theme.border))
+                                    .frame(maxWidth: 220)
+                                    .onSubmit(save)
+                            }
                         }
                     }
                 }
@@ -176,6 +194,7 @@ struct SettingsRootView: View {
         .onChange(of: language) { _, _ in save() }
         .onChange(of: micVoiceProcessing) { _, _ in save() }
         .onChange(of: llmPassEnabled) { _, _ in save() }
+        .onChange(of: modelChoice) { _, _ in save() }
         .onChange(of: summaryType) { _, _ in save() }
     }
 
@@ -273,19 +292,27 @@ struct SettingsRootView: View {
         language = Config.transcriptionLanguageCode()
         micVoiceProcessing = Config.micVoiceProcessing()
         llmPassEnabled = Config.llmPassEnabled()
-        llmModel = Config.llmModel()
+        let storedModel = Config.llmModel()
+        if let known = Self.knownModels.first(where: { $0.id == storedModel }) {
+            modelChoice = known.id
+            customModel = ""
+        } else {
+            modelChoice = "outro"
+            customModel = storedModel
+        }
         summaryType = Config.summaryType()
         hasStoredAPIKey = OpenAIKeychain.get() != nil
     }
 
     private func save() {
+        let resolvedModel = modelChoice == "outro" ? customModel : modelChoice
         Config.save(
             recordingsDir: recordingsDirText,
             transcriptionEnabled: transcriptionEnabled,
             transcriptionEngine: engine,
             transcriptionLanguage: language,
             llmPassEnabled: llmPassEnabled,
-            llmModel: llmModel,
+            llmModel: resolvedModel,
             summaryType: summaryType,
             micVoiceProcessing: micVoiceProcessing
         )

@@ -87,10 +87,10 @@ enum Config {
         transcription()?["llm_pass"] as? Bool ?? false
     }
 
-    /// OpenAI model tag (e.g. "gpt-4o-mini"). Needs a valid API key in the
+    /// OpenAI model tag (e.g. "gpt-5.6-terra"). Needs a valid API key in the
     /// Keychain (see OpenAIKeychain) — this alone doesn't enable the pass.
     static func llmModel() -> String {
-        transcription()?["llm_model"] as? String ?? "gpt-4o-mini"
+        transcription()?["llm_model"] as? String ?? "gpt-5.6-terra"
     }
 
     /// Which document shape the summary pass produces: "ata" (formal
@@ -140,7 +140,7 @@ enum Config {
         t["language"] = transcriptionLanguage
         t["llm_pass"] = llmPassEnabled
         let trimmedModel = llmModel.trimmingCharacters(in: .whitespacesAndNewlines)
-        t["llm_model"] = trimmedModel.isEmpty ? "gpt-4o-mini" : trimmedModel
+        t["llm_model"] = trimmedModel.isEmpty ? "gpt-5.6-terra" : trimmedModel
         t["summary_type"] = summaryType == "ata" ? "ata" : "topicos"
         json["transcription"] = t
 

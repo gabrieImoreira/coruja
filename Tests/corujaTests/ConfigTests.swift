@@ -23,8 +23,22 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(Config.summaryType(), "topicos")
     }
 
-    func testLlmModelDefaultsToGpt4oMini() {
-        XCTAssertEqual(Config.llmModel(), "gpt-4o-mini")
+    func testLlmModelDefaultsToGpt56Terra() {
+        XCTAssertEqual(Config.llmModel(), "gpt-5.6-terra")
+    }
+
+    func testSaveWithEmptyModelFallsBackToDefault() {
+        Config.save(
+            recordingsDir: "",
+            transcriptionEnabled: true,
+            transcriptionEngine: "whisper",
+            transcriptionLanguage: "pt",
+            llmPassEnabled: true,
+            llmModel: "   ",
+            summaryType: "topicos",
+            micVoiceProcessing: false
+        )
+        XCTAssertEqual(Config.llmModel(), "gpt-5.6-terra")
     }
 
     func testSaveAndReloadSummaryTypeAndModel() {
@@ -49,7 +63,7 @@ final class ConfigTests: XCTestCase {
             transcriptionEngine: "whisper",
             transcriptionLanguage: "pt",
             llmPassEnabled: false,
-            llmModel: "gpt-4o-mini",
+            llmModel: "gpt-5.6-sol",
             summaryType: "garbage",
             micVoiceProcessing: false
         )
