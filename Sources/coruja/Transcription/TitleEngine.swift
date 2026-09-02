@@ -11,13 +11,14 @@ import Foundation
 ///    whatever domain jargon this user repeats in nearly every meeting
 ///    ("tem", "está", generic verbs, or for this user "sinistro",
 ///    "reembolso"). TF-IDF against the corpus discounts exactly that.
-/// 2. One small Ollama call turns the resulting keywords into a short
+/// 2. One small OpenAI call turns the resulting keywords into a short
 ///    phrase — the keywords alone read as a tag list, not a title.
 ///
 /// Piggybacks on the same opt-in `llm_pass` config as SummaryEngine (see
 /// Config.swift): tested the keyword step without an LLM afterward and it
 /// wasn't good enough to ship as the default, so there's no LLM-free path
-/// here. Without Ollama, a session simply keeps showing its timestamp.
+/// here. Without a configured API key, a session simply keeps showing its
+/// timestamp.
 ///
 /// Titles are stored per-session in `.title` (plain text, one line) — never
 /// the folder name itself (RecordingSession keeps that timestamp-only on
@@ -28,13 +29,15 @@ enum TitleEngine {
 
     enum TitleError: Error, CustomStringConvertible {
         case noKeywords
+        case missingAPIKey
         case httpError(Int)
         case empty
 
         var description: String {
             switch self {
             case .noKeywords: return "not enough text to extract keywords from"
-            case .httpError(let code): return "Ollama returned HTTP \(code) — is it running? (ollama serve)"
+            case .missingAPIKey: return "no OpenAI API key configured"
+            case .httpError(let code): return "OpenAI returned HTTP \(code) — check the API key and usage limits"
             case .empty: return "model returned an empty title"
             }
         }
@@ -45,13 +48,18 @@ enum TitleEngine {
     ///   - root: recordings root, scanned for sibling sessions' `.transcript.json`
     ///     to build the TF-IDF corpus.
     ///   - own: this session's directory — excluded when scanning `root`.
+    ///   - apiKey: OpenAI API key (see OpenAIKeychain) — throws
+    ///     `.missingAPIKey` if empty.
     static func generate(
         segments: [(speaker: String, text: String)],
         root: URL,
         excluding own: URL,
+        apiKey: String,
         model: String,
-        endpoint: URL
+        session: URLSession = .shared
     ) async throws -> String {
+        guard !apiKey.isEmpty else { throw TitleError.missingAPIKey }
+
         let ownWords = wordCounts(segments.map(\.text))
         guard !ownWords.isEmpty else { throw TitleError.noKeywords }
 
@@ -62,7 +70,9 @@ enum TitleEngine {
         let sample = segments.prefix(8)
             .map { "\($0.speaker == "me" ? "Eu" : $0.speaker): \($0.text)" }
             .joined(separator: "\n")
-        let title = try await askOllama(keywords: topKeywords, sample: sample, model: model, endpoint: endpoint)
+        let title = try await askOpenAI(
+            keywords: topKeywords, sample: sample, apiKey: apiKey, model: model, session: session
+        )
         guard !title.isEmpty else { throw TitleError.empty }
         return title
     }
@@ -146,9 +156,11 @@ enum TitleEngine {
         return scored.sorted { $0.1 > $1.1 }.prefix(topN).map(\.0)
     }
 
-    // MARK: - Ollama
+    // MARK: - OpenAI
 
-    private static func askOllama(keywords: [String], sample: String, model: String, endpoint: URL) async throws -> String {
+    private static func askOpenAI(
+        keywords: [String], sample: String, apiKey: String, model: String, session: URLSession
+    ) async throws -> String {
         let prompt = """
         Palavras-chave extraídas de uma reunião (ordem de relevância): \(keywords.joined(separator: ", "))
 
@@ -159,28 +171,36 @@ enum TitleEngine {
         assunto principal desta reunião, baseado nas palavras-chave acima. \
         Responda APENAS o título, sem aspas, sem explicação.
         """
-        var request = URLRequest(url: endpoint.appendingPathComponent("api/chat"))
+        var request = URLRequest(url: URL(string: "https://api.openai.com/v1/chat/completions")!)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.httpBody = try JSONSerialization.data(withJSONObject: [
             "model": model,
-            "stream": false,
+            "temperature": 0.3,
             "messages": [["role": "user", "content": prompt]],
-            "options": ["temperature": 0.3, "num_ctx": 2048],
         ])
         request.timeoutInterval = 60
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw TitleError.httpError((response as? HTTPURLResponse)?.statusCode ?? -1)
         }
 
-        struct OllamaResponse: Decodable {
-            struct Message: Decodable { let content: String }
-            let message: Message
+        struct OpenAIResponse: Decodable {
+            struct Choice: Decodable {
+                struct Message: Decodable { let content: String }
+                let message: Message
+            }
+            let choices: [Choice]
         }
-        let ollama = try JSONDecoder().decode(OllamaResponse.self, from: data)
-        var title = ollama.message.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard
+            let parsed = try? JSONDecoder().decode(OpenAIResponse.self, from: data),
+            var title = parsed.choices.first?.message.content
+                .trimmingCharacters(in: .whitespacesAndNewlines) as String?
+        else {
+            return ""
+        }
         // The model sometimes wraps the title in quotes or adds a trailing
         // line despite the "only the title" instruction — strip both.
         if let firstLine = title.split(separator: "\n", maxSplits: 1).first { title = String(firstLine) }
