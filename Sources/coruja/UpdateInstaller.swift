@@ -55,10 +55,29 @@ enum UpdateInstaller {
         try run("/usr/bin/xattr", ["-cr", appDir.path], error: .installFailed("xattr"))
 
         let installedURL = URL(fileURLWithPath: "/Applications/Coruja.app")
+        var backupURL: URL?
         if FileManager.default.fileExists(atPath: installedURL.path) {
-            try FileManager.default.trashItem(at: installedURL, resultingItemURL: nil)
+            let backup = cacheDir.appendingPathComponent("Coruja.app.backup")
+            try? FileManager.default.removeItem(at: backup) // stale leftover from a prior failed attempt
+            try FileManager.default.moveItem(at: installedURL, to: backup)
+            backupURL = backup
         }
-        try FileManager.default.moveItem(at: appDir, to: installedURL)
+
+        do {
+            try FileManager.default.moveItem(at: appDir, to: installedURL)
+        } catch {
+            // The new bundle couldn't be placed — restore the old one so the user
+            // is never left with nothing at /Applications/Coruja.app.
+            if let backupURL {
+                try? FileManager.default.moveItem(at: backupURL, to: installedURL)
+            }
+            throw error
+        }
+
+        // New bundle is in place — the backup (if any) is no longer needed.
+        if let backupURL {
+            try? FileManager.default.trashItem(at: backupURL, resultingItemURL: nil)
+        }
 
         let config = NSWorkspace.OpenConfiguration()
         config.activates = true
