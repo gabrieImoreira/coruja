@@ -17,8 +17,9 @@ de cada conversa, sem depender de um serviço pago.
 - Tem uma janela própria para ver a lista de reuniões gravadas, ler a
   transcrição, ouvir o áudio e apagar gravações que não quiser mais.
 
-Não gera resumo automático (ainda) — só a transcrição, palavra por palavra,
-com marcação de quem falou o quê.
+Opcionalmente, também gera um resumo (ou ata) da reunião com itens de ação
+e um título curto — isso usa a API da OpenAI (não é local, ver "Resumo e
+título automático (opcional, usa OpenAI)" abaixo) e é desligado por padrão.
 
 ## Como instalar
 
@@ -28,12 +29,12 @@ com marcação de quem falou o quê.
    depois de instalado, a coruja transcreve sem precisar baixar nada nem
    depender de internet.
 2. Descompacte e arraste o `Coruja.app` para a pasta **Aplicativos**.
-3. **Só na primeira vez**: como este app não passou pelo processo pago de
-   certificação da Apple, o macOS vai bloquear a abertura com um aviso de
-   "não é possível verificar" / "mover para o lixo" — nem clique-direito →
-   Abrir resolve mais isso nas versões recentes do macOS (testado). Pra
-   liberar, abra o app **Terminal** (Cmd+Espaço, digite "Terminal") e
-   cole:
+3. **Só na primeira instalação**: como este app não passou pelo processo
+   pago de certificação da Apple, o macOS vai bloquear a abertura com um
+   aviso de "não é possível verificar" / "mover para o lixo" — nem
+   clique-direito → Abrir resolve mais isso nas versões recentes do macOS
+   (testado). Pra liberar, abra o app **Terminal** (Cmd+Espaço, digite
+   "Terminal") e cole:
    ```sh
    xattr -cr /Applications/Coruja.app
    ```
@@ -41,7 +42,9 @@ com marcação de quem falou o quê.
    outro. (Se preferir tentar sem Terminal: Configurações do Sistema →
    Privacidade e Segurança → role até a seção de segurança → **Abrir
    Mesmo Assim**, se a opção aparecer — mas o comando acima é o único
-   caminho confirmado.)
+   caminho confirmado.) **Atualizações seguintes não precisam disso** — a
+   coruja já remove essa marca de quarentena sozinha ao se autoatualizar
+   (ver "Atualizações" abaixo).
 4. Na primeira gravação, o macOS vai pedir permissão de **Microfone** e de
    **Gravação de Áudio do Sistema** — aceite as duas, senão a gravação sai
    muda.
@@ -83,6 +86,20 @@ abrir direto:
 (Existem outros arquivos internos na pasta, começando com ponto — o
 Finder já esconde eles por padrão. São só apoio técnico do app, não
 precisa mexer.)
+
+### Atualizações
+
+A coruja verifica sozinha se tem uma versão nova no GitHub Releases — ao
+abrir o app e depois a cada 24h — e, se tiver, mostra um aviso perguntando
+se quer atualizar. Também dá pra checar na hora: Configurações → botão
+**"Verificar atualizações"**. Aceitando, ela baixa, instala e reabre
+sozinha, sem precisar repetir o passo do `xattr -cr`.
+
+Isso só funciona pra quem instalou o `Coruja.app` (o caminho normal, acima).
+Rodando como binário de linha de comando / LaunchAgent (ver "Build a partir
+do código" abaixo), a coruja consegue checar e avisar que tem versão nova,
+mas não se autoatualiza — não existe um `.app` pra substituir nesse caso,
+então é preciso atualizar manualmente (`git pull` + `swift build` de novo).
 
 ---
 
@@ -238,28 +255,44 @@ Opcional, em `~/.config/coruja/config.json`:
   microfone e seja transcrito duas vezes.
 - `on_stop` — comando de shell disparado com a pasta da sessão como
   argumento, depois que a transcrição for escrita.
-- `transcription.llm_pass` — `true` liga um passo opcional, sempre local
-  (via [Ollama](https://ollama.com), nada sai da máquina), que gera
-  `summary.md` (resumo + itens de ação) e um título curto pra reunião
-  (ver seção "Título da reunião" abaixo). Desligado por padrão — é texto
-  *gerado*, não transcrito, então só liga se o usuário pedir. Precisa do
-  Ollama rodando (`ollama serve`) com o modelo já baixado
-  (`transcription.llm_model`, padrão `"llama3.1:8b"`;
-  `transcription.llm_endpoint`, padrão `"http://localhost:11434"`).
+- `transcription.llm_pass` — `true` liga um passo opcional que gera
+  `summary.md` (resumo/ata + itens de ação) e um título curto pra reunião
+  (ver seção "Resumo e título automático (opcional, usa OpenAI)" abaixo).
+  Desligado por padrão.
 
-#### Título da reunião
+#### Resumo e título automático (opcional, usa OpenAI)
 
-Com `transcription.llm_pass` ligado, cada sessão ganha um título curto
-automático na janela de notas (ex: "Reembolso e ajustes de previdência"),
-em vez de só a hora — sem precisar lembrar de renomear nada. Gerado em
-duas etapas: primeiro um passo determinístico (sem LLM) compara as
-palavras desta reunião com as das últimas sessões pra achar o que é
-distintivo *desta* conversa (evita repetir jargão que aparece em toda
-reunião sua); depois uma chamada rápida ao Ollama transforma essas
-palavras num título legível. Fica salvo em `.title` (nunca no nome da
-pasta) e é editável a qualquer momento clicando no lápis ao lado do
-título, na janela de notas — útil porque, como qualquer texto gerado,
-ocasionalmente sai errado.
+Com `transcription.llm_pass` ligado (ou pelo toggle equivalente em
+Configurações), a coruja envia a transcrição da reunião pra API da OpenAI
+pra gerar um resumo e um título curto — essa é a única parte da coruja em
+que algo sai da máquina; o resto (gravação e transcrição) continua 100%
+local. Precisa de uma chave de API da OpenAI, configurada em
+Configurações → "Resumo e título automático" → **Chave da API OpenAI**
+(fica salva em `~/.config/coruja/config.json`, em texto puro, como o resto
+das configurações). Sem chave configurada, esse passo simplesmente não
+roda e a coruja segue só transcrevendo.
+
+Duas opções de formato (`transcription.summary_type`, ou o picker
+"Tipo de documento" em Configurações):
+- **Ata da reunião** (`"ata"`) — pauta + decisões, formato mais formal.
+- **Resumo por tópico** (`"topicos"`, padrão) — narrativa detalhada,
+  tópico por tópico.
+
+Em ambos os formatos, itens de ação (compromissos que alguém assumiu na
+reunião) entram numa seção separada, com responsável e prazo quando
+citados. O prompt é explícito em não inventar nada que não esteja
+literalmente na transcrição.
+
+Cada sessão também ganha um título curto automático na janela de notas
+(ex: "Reembolso e ajustes de previdência"), em vez de só a hora — sem
+precisar lembrar de renomear nada. Gerado em duas etapas: primeiro um
+passo determinístico (sem LLM) compara as palavras desta reunião com as
+das últimas sessões pra achar o que é distintivo *desta* conversa (evita
+repetir jargão que aparece em toda reunião sua); depois uma chamada rápida
+à OpenAI transforma essas palavras num título legível. Fica salvo em
+`.title` (nunca no nome da pasta) e é editável a qualquer momento clicando
+no lápis ao lado do título, na janela de notas — útil porque, como
+qualquer texto gerado, ocasionalmente sai errado.
 
 ### CLI
 

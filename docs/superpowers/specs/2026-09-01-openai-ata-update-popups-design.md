@@ -2,6 +2,16 @@
 
 Status: approved (design). Date: 2026-09-01.
 
+**Update (post-implementation):** the API key storage design below (Part 1,
+"API key storage") was superseded — the key is stored in `config.json` in
+plain text instead of the Keychain. Reason: coruja is ad-hoc signed (no paid
+Apple Developer certificate), and the self-update mechanism (Part 6 below)
+replaces the app's binary on every update, which changes its ad-hoc code
+signature — Keychain ACLs are tied to code signature identity, so this would
+have re-prompted the user for Keychain permission on every single update.
+See the `OpenAIKeychain.swift` deletion and `Config.openaiApiKey()` in the
+implementation.
+
 ## Context
 
 Coruja's optional LLM pass (summary + action items + title) runs entirely
