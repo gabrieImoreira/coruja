@@ -14,7 +14,9 @@ import Foundation
 /// directory as its argument — after the transcript is written, or right
 /// after recording when transcription is disabled.
 enum Config {
-    static let path = FileManager.default.homeDirectoryForCurrentUser
+    /// `var`, not `let` — ConfigTests points this at a temp file so tests
+    /// never read or write the developer's real ~/.config/coruja/config.json.
+    static var path = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".config/coruja/config.json")
 
     static let defaultRoot = FileManager.default.homeDirectoryForCurrentUser
@@ -74,26 +76,28 @@ enum Config {
         load()?["transcription"] as? [String: Any]
     }
 
-    /// Optional local-LLM pass over the finished transcript (summary + action
-    /// items). Off by default — it's an extra local model download/run cost
-    /// on top of the transcription engine, and unlike everything else this
-    /// app does, its output is *generated* text rather than a direct
-    /// transcription, so it should never turn on without the user asking.
-    /// Always local (Ollama) — no cloud option, matching every other part of
-    /// this app's "nothing leaves the machine" design.
+    /// Optional OpenAI pass over the finished transcript (summary + action
+    /// items + title). Off by default — unlike everything else this app
+    /// does, its output is *generated* text rather than a direct
+    /// transcription, and turning it on sends the transcript to OpenAI —
+    /// the one place this app's "nothing leaves the machine" design doesn't
+    /// hold. Never turns on without the user asking, and the Settings UI
+    /// says so explicitly next to the toggle.
     static func llmPassEnabled() -> Bool {
         transcription()?["llm_pass"] as? Bool ?? false
     }
 
-    /// Ollama model tag. Needs to already be pulled (`ollama pull <tag>`).
+    /// OpenAI model tag (e.g. "gpt-4o-mini"). Needs a valid API key in the
+    /// Keychain (see OpenAIKeychain) — this alone doesn't enable the pass.
     static func llmModel() -> String {
-        transcription()?["llm_model"] as? String ?? "llama3.1:8b"
+        transcription()?["llm_model"] as? String ?? "gpt-4o-mini"
     }
 
-    /// Ollama's local HTTP endpoint.
-    static func llmEndpoint() -> URL {
-        let raw = transcription()?["llm_endpoint"] as? String ?? "http://localhost:11434"
-        return URL(string: raw) ?? URL(string: "http://localhost:11434")!
+    /// Which document shape the summary pass produces: "ata" (formal
+    /// minutes — pauta/decisões) or "topicos" (detailed topic-by-topic
+    /// narrative). See SummaryEngine.SummaryType.
+    static func summaryType() -> String {
+        transcription()?["summary_type"] as? String ?? "topicos"
     }
 
     /// Apple voice processing (acoustic echo cancellation) on the mic, so
@@ -117,6 +121,7 @@ enum Config {
         transcriptionLanguage: String,
         llmPassEnabled: Bool,
         llmModel: String,
+        summaryType: String,
         micVoiceProcessing: Bool
     ) {
         var json = load() ?? [:]
@@ -135,7 +140,8 @@ enum Config {
         t["language"] = transcriptionLanguage
         t["llm_pass"] = llmPassEnabled
         let trimmedModel = llmModel.trimmingCharacters(in: .whitespacesAndNewlines)
-        t["llm_model"] = trimmedModel.isEmpty ? "llama3.1:8b" : trimmedModel
+        t["llm_model"] = trimmedModel.isEmpty ? "gpt-4o-mini" : trimmedModel
+        t["summary_type"] = summaryType == "ata" ? "ata" : "topicos"
         json["transcription"] = t
 
         let dir = path.deletingLastPathComponent()

@@ -31,5 +31,9 @@ let package = Package(
                 ]),
             ]
         ),
+        .testTarget(
+            name: "corujaTests",
+            dependencies: ["coruja"]
+        ),
     ]
 )
