@@ -14,7 +14,9 @@ final class NotificationPanel: NSObject {
         /// Top-right of `window`'s frame, or the main screen if `window` is
         /// nil or not currently on screen.
         case topRight(of: NSWindow?)
-        case bottomRightOfScreen
+        /// Bottom-right of `window`'s frame, or the main screen if `window`
+        /// is nil or not currently on screen.
+        case bottomRight(of: NSWindow?)
     }
 
     private var panel: NSPanel?
@@ -146,8 +148,8 @@ final class NotificationPanel: NSObject {
         case .topRight(let window):
             let frame = window?.frame ?? NSScreen.main?.visibleFrame ?? .zero
             return NSPoint(x: frame.maxX - size.width - margin, y: frame.maxY - size.height - margin)
-        case .bottomRightOfScreen:
-            let frame = NSScreen.main?.visibleFrame ?? .zero
+        case .bottomRight(let window):
+            let frame = window?.frame ?? NSScreen.main?.visibleFrame ?? .zero
             return NSPoint(x: frame.maxX - size.width - margin, y: frame.minY + margin)
         }
     }

@@ -214,7 +214,7 @@ final class AppController: NSObject {
             message: "Atualizar agora?",
             actionTitle: "Atualizar",
             ignoreTitle: "Depois",
-            position: .bottomRightOfScreen,
+            position: .bottomRight(of: notesWindow?.window),
             autoDismiss: nil,
             onAction: { [weak self] in self?.performUpdate(info) },
             onIgnore: onIgnore
