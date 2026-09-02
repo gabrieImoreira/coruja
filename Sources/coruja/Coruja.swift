@@ -49,6 +49,13 @@ struct Run: ParsableCommand {
         // of menu bar state, same as any ordinary app (Cmd+Tab, clicking the
         // Dock icon, right-click menu).
         app.setActivationPolicy(.regular)
+        // Hand-rolled NSApplication setup (no SwiftUI App/WindowGroup
+        // lifecycle) never gets the standard Edit menu SwiftUI apps get for
+        // free — without it, Cmd+C/V/X/A/Z do nothing anywhere in the app,
+        // since AppKit resolves those key equivalents through a menu item,
+        // not a built-in text-field key binding. Confirmed live: pasting an
+        // API key into Settings silently failed until this was added.
+        app.mainMenu = Run.buildMainMenu()
 
         let delegate = AppDelegate()
         app.delegate = delegate
@@ -70,6 +77,39 @@ struct Run: ParsableCommand {
             "coruja up · recordings → \(root.path) · ^C to quit\n".utf8
         ))
         app.run()
+    }
+
+    /// Minimal main menu: an App menu (About/Quit) and an Edit menu wired to
+    /// the standard `cut:`/`copy:`/`paste:`/`selectAll:`/`undo:`/`redo:`
+    /// responder-chain selectors. AppKit resolves Cmd-key equivalents through
+    /// menu items, not through a text field's own key handling — without
+    /// this, every text field in the app (including Settings' API key
+    /// field) silently can't cut/copy/paste/select-all/undo.
+    @MainActor
+    private static func buildMainMenu() -> NSMenu {
+        let mainMenu = NSMenu()
+
+        let appMenuItem = NSMenuItem()
+        mainMenu.addItem(appMenuItem)
+        let appMenu = NSMenu()
+        appMenuItem.submenu = appMenu
+        appMenu.addItem(withTitle: "Sobre a coruja", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "Sair da coruja", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+
+        let editMenuItem = NSMenuItem()
+        mainMenu.addItem(editMenuItem)
+        let editMenu = NSMenu(title: "Editar")
+        editMenuItem.submenu = editMenu
+        editMenu.addItem(withTitle: "Desfazer", action: Selector(("undo:")), keyEquivalent: "z")
+        editMenu.addItem(withTitle: "Refazer", action: Selector(("redo:")), keyEquivalent: "Z")
+        editMenu.addItem(.separator())
+        editMenu.addItem(withTitle: "Recortar", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: "Copiar", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: "Colar", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(withTitle: "Selecionar Tudo", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+
+        return mainMenu
     }
 }
 
