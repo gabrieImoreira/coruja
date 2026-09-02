@@ -18,8 +18,7 @@ struct SettingsRootView: View {
     @State private var language = "pt"
     @State private var micVoiceProcessing = false
     @State private var llmPassEnabled = false
-    @State private var modelChoice = "gpt-5.6-terra" // one of Self.knownModels' ids, or "outro"
-    @State private var customModel = ""
+    @State private var modelChoice = "gpt-5.6-terra" // one of Self.knownModels' ids
     @State private var summaryType = "topicos"
     @State private var apiKeyDraft = ""
     @State private var hasStoredAPIKey = false
@@ -151,22 +150,10 @@ struct SettingsRootView: View {
                                 ForEach(Self.knownModels, id: \.id) { model in
                                     Text(model.label).tag(model.id)
                                 }
-                                Text("Outro").tag("outro")
                             }
                             .labelsHidden()
-                            .pickerStyle(.radioGroup)
-
-                            if modelChoice == "outro" {
-                                TextField("modelo", text: $customModel)
-                                    .textFieldStyle(.plain)
-                                    .font(.system(size: 12.5))
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 6)
-                                    .background(theme.playerCardBg, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(theme.border))
-                                    .frame(maxWidth: 220)
-                                    .onSubmit(save)
-                            }
+                            .pickerStyle(.menu)
+                            .frame(maxWidth: 260, alignment: .leading)
                         }
                     }
                 }
@@ -293,26 +280,19 @@ struct SettingsRootView: View {
         micVoiceProcessing = Config.micVoiceProcessing()
         llmPassEnabled = Config.llmPassEnabled()
         let storedModel = Config.llmModel()
-        if let known = Self.knownModels.first(where: { $0.id == storedModel }) {
-            modelChoice = known.id
-            customModel = ""
-        } else {
-            modelChoice = "outro"
-            customModel = storedModel
-        }
+        modelChoice = Self.knownModels.contains(where: { $0.id == storedModel }) ? storedModel : "gpt-5.6-terra"
         summaryType = Config.summaryType()
         hasStoredAPIKey = OpenAIKeychain.get() != nil
     }
 
     private func save() {
-        let resolvedModel = modelChoice == "outro" ? customModel : modelChoice
         Config.save(
             recordingsDir: recordingsDirText,
             transcriptionEnabled: transcriptionEnabled,
             transcriptionEngine: engine,
             transcriptionLanguage: language,
             llmPassEnabled: llmPassEnabled,
-            llmModel: resolvedModel,
+            llmModel: modelChoice,
             summaryType: summaryType,
             micVoiceProcessing: micVoiceProcessing
         )
