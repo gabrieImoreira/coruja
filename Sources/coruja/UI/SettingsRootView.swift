@@ -23,6 +23,11 @@ struct SettingsRootView: View {
     @State private var apiKeyDraft = ""
     @State private var hasStoredAPIKey = false
     @State private var apiKeySaveError: String?
+    @State private var updateCheckState: UpdateCheckState = .idle
+
+    private enum UpdateCheckState {
+        case idle, checking, upToDate, available(UpdateInfo), installing, failed(String)
+    }
 
     private var theme: Theme { Theme(isDark: isDarkMode) }
 
@@ -147,6 +152,15 @@ struct SettingsRootView: View {
                         }
                     }
                 }
+
+                section("Sobre") {
+                    labeledRow("Versão") {
+                        Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—")
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(theme.rowTitleColor)
+                    }
+                    updateCheckRow
+                }
             }
             .padding(24)
         }
@@ -209,6 +223,47 @@ struct SettingsRootView: View {
             .foregroundStyle(theme.metaColor)
     }
 
+    private var updateCheckRow: some View {
+        HStack(spacing: 8) {
+            switch updateCheckState {
+            case .idle:
+                Button("Verificar atualizações", action: checkForUpdatesManually)
+                    .buttonStyle(.plain)
+                    .font(.system(size: 12))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(theme.playerCardBg, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(theme.border))
+            case .checking:
+                ProgressView().controlSize(.mini)
+                Text("Verificando…").font(.system(size: 11)).foregroundStyle(theme.metaColor)
+            case .upToDate:
+                Text("Você já está na versão mais recente.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(theme.metaColor)
+            case .available(let info):
+                Text("Versão \(info.version) disponível.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(theme.rowTitleColor)
+                Button("Atualizar", action: { installUpdate(info) })
+                    .buttonStyle(.plain)
+                    .font(.system(size: 12))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(theme.playerCardBg, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(theme.border))
+            case .installing:
+                ProgressView().controlSize(.mini)
+                Text("Instalando…").font(.system(size: 11)).foregroundStyle(theme.metaColor)
+            case .failed(let message):
+                Text(message).font(.system(size: 11)).foregroundStyle(.red)
+                Button("Tentar de novo", action: checkForUpdatesManually)
+                    .buttonStyle(.plain)
+                    .font(.system(size: 12))
+            }
+        }
+    }
+
     // MARK: - Load / save
 
     private func load() {
@@ -261,5 +316,32 @@ struct SettingsRootView: View {
         guard panel.runModal() == .OK, let url = panel.url else { return }
         recordingsDirText = url.path
         save()
+    }
+
+    // MARK: - Updates
+
+    private func checkForUpdatesManually() {
+        updateCheckState = .checking
+        Task {
+            if let info = await UpdateChecker.checkForUpdate() {
+                updateCheckState = .available(info)
+            } else {
+                updateCheckState = .upToDate
+            }
+        }
+    }
+
+    private func installUpdate(_ info: UpdateInfo) {
+        updateCheckState = .installing
+        Task {
+            do {
+                try await UpdateInstaller.install(info)
+                // On success the process is replaced/terminated by
+                // UpdateInstaller — this line only runs if that step throws
+                // before reaching the relaunch.
+            } catch {
+                updateCheckState = .failed("\(error)")
+            }
+        }
     }
 }
