@@ -111,35 +111,56 @@ enum SummaryEngine {
         }
 
         let finalSummary: String
-        if partialSummaries.count <= 1 {
-            finalSummary = partialSummaries.first ?? ""
-        } else {
-            finalSummary = try await reduceSummaries(partialSummaries, apiKey: apiKey, model: model, session: session)
+        switch summaryType {
+        case .ata:
+            // Always compose, even for a single chunk — the per-chunk pass
+            // only extracts grounded raw notes (see summarizeChunk's ata
+            // shape); composeAta is what actually writes the structured
+            // document (numbered sections, tables, the closing checklists).
+            finalSummary = try await composeAta(
+                from: partialSummaries, actionItems: actionItems, apiKey: apiKey, model: model, session: session
+            )
+        case .topicos:
+            if partialSummaries.count <= 1 {
+                finalSummary = partialSummaries.first ?? ""
+            } else {
+                finalSummary = try await reduceSummaries(partialSummaries, apiKey: apiKey, model: model, session: session)
+            }
         }
 
         return Summary(resumo: finalSummary, itensDeAcao: actionItems)
     }
 
     /// Renders a `Summary` as the Markdown written to `summary.md` (or
-    /// `summary-test.md` for the `Summarize` CLI command): a document-level
-    /// heading (which depends on `type`), the model's own `resumo` body
-    /// (already containing its own Markdown sub-headings — see
-    /// `summarizeChunk`'s shape instructions), and, if any, an action-items
-    /// section.
+    /// `summary-test.md` for the `Summarize` CLI command).
+    ///
+    /// `.ata`'s `resumo` is already the complete, composed document (own H1
+    /// title, numbered sections, closing checklists — see `composeAta`),
+    /// including its own "Questões em aberto" table built from the action
+    /// items — so it's written as-is, with no extra heading or duplicate
+    /// action-items section tacked on.
+    ///
+    /// `.topicos`'s `resumo` is just the topic-by-topic body (its own `##`/
+    /// `###` sub-headings, no document title) — this prepends the "# Resumo"
+    /// heading and appends a plain action-items list, same as before.
     static func render(_ summary: Summary, type: SummaryType) -> String {
-        let heading = type == .ata ? "# Ata da reunião" : "# Resumo"
-        var lines = [heading, "", summary.resumo, ""]
-        if !summary.itensDeAcao.isEmpty {
-            lines.append("## Itens de ação")
-            lines.append("")
-            for item in summary.itensDeAcao {
-                var line = "- \(item.item)"
-                if let responsavel = item.responsavel { line += " — **\(responsavel)**" }
-                if let prazo = item.prazo { line += " (prazo: \(prazo))" }
-                lines.append(line)
+        switch type {
+        case .ata:
+            return summary.resumo
+        case .topicos:
+            var lines = ["# Resumo", "", summary.resumo, ""]
+            if !summary.itensDeAcao.isEmpty {
+                lines.append("## Itens de ação")
+                lines.append("")
+                for item in summary.itensDeAcao {
+                    var line = "- \(item.item)"
+                    if let responsavel = item.responsavel { line += " — **\(responsavel)**" }
+                    if let prazo = item.prazo { line += " (prazo: \(prazo))" }
+                    lines.append(line)
+                }
             }
+            return lines.joined(separator: "\n")
         }
-        return lines.joined(separator: "\n")
     }
 
     private static let extractionRules = """
@@ -174,22 +195,35 @@ enum SummaryEngine {
             shapeInstructions = """
             Responda em JSON com exatamente este formato:
             {
-              "resumo": "## Tópicos\\n\\n### <nome do tópico 1>\\n<2 a 4 frases sobre o que foi dito>\\n\\n### <nome do tópico 2>\\n...",
+              "resumo": "## Tópicos\\n\\n### <nome do tópico 1>\\n<4 a 7 frases detalhando o que foi dito: o que foi discutido, argumentos levantados, alternativas mencionadas, e a conclusão ou próximo passo se houve um>\\n\\n### <nome do tópico 2>\\n...",
               "itens_de_acao": [
                 {"item": "descrição da ação", "responsavel": "nome citado ou null", "prazo": "prazo citado ou null"}
               ]
             }
-            Liste só os tópicos realmente discutidos NESTE trecho — pode ser um só.
+            Liste só os tópicos realmente discutidos NESTE trecho — pode ser um só. \
+            Prefira profundidade a brevidade: é melhor detalhar bem 2 tópicos do que \
+            listar 5 tópicos superficiais.
             """
         case .ata:
+            // This chunk-level pass only extracts grounded raw notes, tagged
+            // by category — composeAta (the reduce step, always run for
+            // .ata) is what turns these into the actual structured document.
+            // Keeping this pass's job narrow (extraction, not writing) is
+            // what lets the reduce step synthesize across chunks instead of
+            // just concatenating already-finished prose.
             shapeInstructions = """
             Responda em JSON com exatamente este formato:
             {
-              "resumo": "## Pauta\\n- <tópico abordado neste trecho>\\n\\n## Decisões\\n- <decisão tomada, ou omita esta seção se nenhuma>",
+              "resumo": "**Tópicos abordados:**\\n- <assunto discutido neste trecho>\\n\\n**Decisões:**\\n- <decisão tomada, com o racional se foi dito>\\n\\n**Pendências:**\\n- <algo que ficou em aberto ou precisa de confirmação — inclua responsável entre parênteses se foi citado>\\n\\n**Pontos de atenção:**\\n- <algo que muda um comportamento existente, um risco, ou um problema apontado>",
               "itens_de_acao": [
                 {"item": "descrição da ação", "responsavel": "nome citado ou null", "prazo": "prazo citado ou null"}
               ]
             }
+            Omita inteiramente qualquer uma das quatro seções (com o cabeçalho em \
+            negrito e tudo) se não houver nada real desse tipo neste trecho — não \
+            invente conteúdo só para preencher a seção. Seja específico: cite os \
+            termos exatos usados (nomes de sistemas, canais, campos, siglas), não \
+            generalize.
             """
         }
 
@@ -238,6 +272,102 @@ enum SummaryEngine {
             return partials.joined(separator: "\n\n")
         }
         return reduced.resumo
+    }
+
+    /// Turns the per-chunk raw notes (see `summarizeChunk`'s `.ata` shape)
+    /// plus the flattened action items into the actual ata: a proper
+    /// briefing document with its own title, numbered thematic sections
+    /// (topics from different chunks about the same subject are merged into
+    /// one section, not repeated), inline status tags, tables where the
+    /// content is naturally tabular, and two closing sections every ata
+    /// needs — a checklist of what was actually decided, and a table of
+    /// what's still open with who owns it.
+    ///
+    /// Always called for `.ata`, even for a single chunk (a short meeting
+    /// still deserves the proper structure, not just the raw extraction
+    /// pass's bullet notes) — this is the pass that actually *writes* the
+    /// document; `summarizeChunk` only ever extracts grounded raw material.
+    private static func composeAta(
+        from partials: [String],
+        actionItems: [ActionItem],
+        apiKey: String,
+        model: String,
+        session: URLSession
+    ) async throws -> String {
+        let notes = partials.enumerated()
+            .map { "### Notas do trecho \($0 + 1)\n\($1)" }
+            .joined(separator: "\n\n")
+
+        let actionItemsJSON: String
+        if actionItems.isEmpty {
+            actionItemsJSON = "(nenhum item de ação foi identificado nos trechos)"
+        } else {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            actionItemsJSON = (try? encoder.encode(actionItems)).flatMap { String(data: $0, encoding: .utf8) }
+                ?? "(nenhum item de ação foi identificado nos trechos)"
+        }
+
+        let prompt = """
+        Você é responsável por escrever a ATA de uma reunião de trabalho, em português, \
+        a partir de notas já extraídas trecho a trecho da transcrição (abaixo). As notas \
+        já são fiéis ao que foi dito — seu trabalho agora é ORGANIZAR e ESTRUTURAR, não \
+        resumir de novo nem simplificar. O resultado deve ter nível de um documento \
+        corporativo de verdade, não um resumo genérico.
+
+        REGRAS OBRIGATÓRIAS:
+        - NÃO invente nada que não esteja nas notas abaixo ou na lista de itens de ação. \
+        Toda informação tem que rastrear para algo que as notas realmente dizem.
+        - NÃO generalize os termos específicos citados (nomes de sistemas, siglas, \
+        canais, campos) — use exatamente os termos das notas.
+        - Assuntos relacionados discutidos em trechos diferentes (ex.: o mesmo tópico \
+        retomado depois na reunião) devem virar UMA seção só, não uma seção repetida \
+        por trecho — organize por ASSUNTO, não pela ordem cronológica dos trechos.
+        - Toda pendência, decisão pendente ou item de ação deve aparecer na tabela final \
+        "Questões em aberto" — não deixe nada órfão só na seção temática.
+
+        ESTRUTURA OBRIGATÓRIA DO DOCUMENTO (em Markdown):
+
+        1. Um título nível 1 (`# `) resumindo o assunto principal da reunião em uma linha.
+        2. Um bloco de citação (`> `) logo abaixo do título, com 1-2 frases de contexto \
+        sobre do que se trata a reunião (baseado no que as notas mostram) e a legenda \
+        dos marcadores usados: `[MUDANÇA]` (altera algo que já existia), `[DECISÃO]` \
+        (algo foi decidido), `[PENDENTE]` (precisa de definição/confirmação, indique \
+        de quem se souber — ex. `[PENDENTE — NOME]`), `[ATENÇÃO]` (risco, problema ou \
+        ponto que merece destaque).
+        3. Seções numeradas `## PARTE N — TÍTULO DA SEÇÃO`, cada uma cobrindo um \
+        assunto coeso da reunião (não um trecho/chunk — um ASSUNTO). Dentro de cada \
+        seção, use bullets (`- `) para os pontos, aplique os marcadores acima onde \
+        fizer sentido, e use uma tabela Markdown (`| coluna | coluna |`) sempre que o \
+        conteúdo for naturalmente comparativo ou tabular (ex.: uma lista de itens com \
+        um atributo cada, como "serviço → decisão", "opção → status").
+        4. Uma seção final `## Definições desta reunião` — uma lista de bullets, cada \
+        um começando com "✔ ", resumindo objetivamente cada decisão que de fato foi \
+        tomada (não pendências, só o que ficou definido).
+        5. Uma seção final `## Questões em aberto` — uma tabela Markdown com colunas \
+        `| # | Item | Responsável | Prazo |`, listando TODOS os itens de ação (da lista \
+        JSON abaixo) e qualquer outra pendência real das notas que ainda não tem \
+        solução. Use "—" quando responsável ou prazo não foram citados. Numere as \
+        linhas a partir de 1.
+
+        Responda em JSON com exatamente este formato:
+        {"resumo": "o documento completo, em Markdown, seguindo a estrutura acima"}
+
+        ITENS DE AÇÃO IDENTIFICADOS (JSON, para você incorporar na tabela final):
+        \(actionItemsJSON)
+
+        NOTAS EXTRAÍDAS DOS TRECHOS DA REUNIÃO, EM ORDEM CRONOLÓGICA:
+        \(notes)
+        """
+
+        struct Composed: Codable { let resumo: String }
+        let data = try await callOpenAIRaw(prompt: prompt, apiKey: apiKey, model: model, session: session)
+        guard let composed = try? JSONDecoder().decode(Composed.self, from: data) else {
+            // Composing failing shouldn't lose the extraction pass's work —
+            // fall back to the raw per-chunk notes joined as-is.
+            return notes
+        }
+        return composed.resumo
     }
 
     private static func callOpenAI(

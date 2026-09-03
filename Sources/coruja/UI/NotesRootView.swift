@@ -546,39 +546,154 @@ struct NotesRootView: View {
         }
     }
 
-    /// Minimal line-based Markdown rendering — `SummaryEngine.render`'s
-    /// output only ever uses `#`/`##` headings, `- ` bullets, and plain
-    /// paragraphs, so a full Markdown parser would be more than this needs.
+    /// Block-level Markdown rendering for the OpenAI-generated resumo/ata:
+    /// `#`/`##`/`###` headings, `- `/`* ` bullets, `> ` blockquotes, `---`
+    /// dividers, pipe tables, and plain paragraphs — each rendered through
+    /// `inlineMarkdown` so `**bold**`/`*italic*`/`` `code` `` inside any of
+    /// those render as real styling instead of literal asterisks/backticks.
+    /// Not a full CommonMark parser (no nested lists, no code blocks) —
+    /// `SummaryEngine`'s prompts are constrained to exactly this subset.
+    private enum SummaryBlock {
+        case heading1(String), heading2(String), heading3(String)
+        case bullet(String)
+        case quote(String)
+        case divider
+        case paragraph(String)
+        case table([[String]]) // row 0 is the header row
+    }
+
+    private func parseSummaryBlocks(_ text: String) -> [SummaryBlock] {
+        let lines = text.components(separatedBy: "\n")
+        var blocks: [SummaryBlock] = []
+        var i = 0
+        while i < lines.count {
+            let trimmed = lines[i].trimmingCharacters(in: .whitespaces)
+
+            if trimmed.hasPrefix("|") {
+                var tableLines: [String] = []
+                while i < lines.count, lines[i].trimmingCharacters(in: .whitespaces).hasPrefix("|") {
+                    tableLines.append(lines[i])
+                    i += 1
+                }
+                let rows = tableLines
+                    .map { line -> [String] in
+                        var cells = line.split(separator: "|", omittingEmptySubsequences: false)
+                            .map { $0.trimmingCharacters(in: .whitespaces) }
+                        if cells.first == "" { cells.removeFirst() }
+                        if cells.last == "" { cells.removeLast() }
+                        return cells
+                    }
+                    // Drop the `|---|---|` alignment row — every cell is only dashes/colons.
+                    .filter { row in !row.allSatisfy { $0.isEmpty || $0.allSatisfy { "-:".contains($0) } } }
+                if !rows.isEmpty { blocks.append(.table(rows)) }
+                continue
+            }
+
+            if trimmed.isEmpty {
+                i += 1
+                continue
+            }
+
+            if trimmed.hasPrefix("### ") {
+                blocks.append(.heading3(String(trimmed.dropFirst(4))))
+            } else if trimmed.hasPrefix("## ") {
+                blocks.append(.heading2(String(trimmed.dropFirst(3))))
+            } else if trimmed.hasPrefix("# ") {
+                blocks.append(.heading1(String(trimmed.dropFirst(2))))
+            } else if trimmed.hasPrefix("- ") || trimmed.hasPrefix("* ") {
+                blocks.append(.bullet(String(trimmed.dropFirst(2))))
+            } else if trimmed.hasPrefix("> ") {
+                blocks.append(.quote(String(trimmed.dropFirst(2))))
+            } else if trimmed == "---" || trimmed == "***" {
+                blocks.append(.divider)
+            } else {
+                blocks.append(.paragraph(trimmed))
+            }
+            i += 1
+        }
+        return blocks
+    }
+
+    /// Parses inline Markdown (`**bold**`, `*italic*`, `` `code` ``) within
+    /// one already-block-stripped line — block-level syntax (headings,
+    /// lists, tables) is handled by `parseSummaryBlocks` before this ever
+    /// sees the text, so only inline styling is relevant here.
+    private func inlineMarkdown(_ s: String) -> AttributedString {
+        (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
+            ?? AttributedString(s)
+    }
+
     private func renderedSummary(_ text: String) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            ForEach(Array(text.split(separator: "\n", omittingEmptySubsequences: false).enumerated()), id: \.offset) { _, rawLine in
-                let line = String(rawLine)
-                if line.hasPrefix("## ") {
-                    Text(line.dropFirst(3))
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(theme.headerTitleColor)
-                        .padding(.top, 6)
-                } else if line.hasPrefix("# ") {
-                    Text(line.dropFirst(2))
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(theme.headerTitleColor)
-                } else if line.hasPrefix("- ") {
-                    HStack(alignment: .top, spacing: 6) {
-                        Text("•").foregroundStyle(theme.metaColor)
-                        Text(line.dropFirst(2))
-                            .font(.system(size: 14))
-                            .foregroundStyle(theme.bodyColor)
-                    }
-                } else if !line.trimmingCharacters(in: .whitespaces).isEmpty {
-                    Text(line)
-                        .font(.system(size: 14))
-                        .lineSpacing(4)
-                        .foregroundStyle(theme.bodyColor)
-                }
+            ForEach(Array(parseSummaryBlocks(text).enumerated()), id: \.offset) { _, block in
+                summaryBlockView(block)
             }
         }
         .textSelection(.enabled)
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    @ViewBuilder
+    private func summaryBlockView(_ block: SummaryBlock) -> some View {
+        switch block {
+        case .heading1(let s):
+            Text(inlineMarkdown(s))
+                .font(.system(size: 19, weight: .bold))
+                .foregroundStyle(theme.headerTitleColor)
+        case .heading2(let s):
+            Text(inlineMarkdown(s))
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(theme.headerTitleColor)
+                .padding(.top, 6)
+        case .heading3(let s):
+            Text(inlineMarkdown(s))
+                .font(.system(size: 14.5, weight: .semibold))
+                .foregroundStyle(theme.headerTitleColor)
+        case .bullet(let s):
+            HStack(alignment: .top, spacing: 6) {
+                Text("•").foregroundStyle(theme.metaColor)
+                Text(inlineMarkdown(s))
+                    .font(.system(size: 14))
+                    .foregroundStyle(theme.bodyColor)
+            }
+        case .quote(let s):
+            Text(inlineMarkdown(s))
+                .font(.system(size: 13).italic())
+                .foregroundStyle(theme.metaColor)
+                .padding(.leading, 10)
+                .overlay(Rectangle().fill(theme.border).frame(width: 2), alignment: .leading)
+        case .divider:
+            Divider().overlay(theme.border).padding(.vertical, 4)
+        case .paragraph(let s):
+            Text(inlineMarkdown(s))
+                .font(.system(size: 14))
+                .lineSpacing(4)
+                .foregroundStyle(theme.bodyColor)
+        case .table(let rows):
+            summaryTable(rows)
+        }
+    }
+
+    private func summaryTable(_ rows: [[String]]) -> some View {
+        let columnCount = rows.map(\.count).max() ?? 0
+        return Grid(alignment: .topLeading, horizontalSpacing: 14, verticalSpacing: 8) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { rowIndex, row in
+                GridRow {
+                    ForEach(0..<columnCount, id: \.self) { col in
+                        let cell = col < row.count ? row[col] : ""
+                        Text(inlineMarkdown(cell))
+                            .font(.system(size: 12.5, weight: rowIndex == 0 ? .semibold : .regular))
+                            .foregroundStyle(rowIndex == 0 ? theme.headerTitleColor : theme.bodyColor)
+                    }
+                }
+                if rowIndex == 0 {
+                    Divider().overlay(theme.border).gridCellColumns(columnCount)
+                }
+            }
+        }
+        .padding(10)
+        .background(theme.playerCardBg, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(theme.border))
     }
 
     private func generateSummary(_ type: SummaryEngine.SummaryType, for session: SessionEntry) {

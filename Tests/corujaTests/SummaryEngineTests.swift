@@ -74,6 +74,28 @@ final class SummaryEngineTests: XCTestCase {
         XCTAssertEqual(summary.itensDeAcao[0].responsavel, "Ana")
     }
 
+    func testAtaAlwaysComposesEvenSingleChunk() async throws {
+        multiChunkCallCount = 0
+        let chunkContent = "{\"resumo\": \"**Tópicos abordados:**\\n- x\", \"itens_de_acao\": []}"
+        let composedContent = "{\"resumo\": \"# Ata\\n\\n## PARTE 1 — X\\n- x\"}"
+        MockURLProtocol.handler = { [weak self] _ in
+            multiChunkCallCount += 1
+            if multiChunkCallCount == 1 {
+                return (200, self!.openAIResponse(content: chunkContent))
+            }
+            return (200, self!.openAIResponse(content: composedContent))
+        }
+        let segments = [SummaryEngine.TimedSegment(speaker: "me", text: "falamos de x", startMs: 0)]
+
+        let summary = try await SummaryEngine.summarize(
+            segments: segments, apiKey: "sk-test", model: "gpt-4o-mini",
+            summaryType: .ata, session: .mocked()
+        )
+
+        XCTAssertEqual(multiChunkCallCount, 2, "expected 1 chunk extraction call + 1 compose call, even for a single chunk")
+        XCTAssertTrue(summary.resumo.contains("PARTE 1"))
+    }
+
     func testMultiChunkSummariesAreReduced() async throws {
         multiChunkCallCount = 0
         let chunkContent = "{\"resumo\": \"## Tópicos\\n\\n### Chunk\\ndiscutido X\", \"itens_de_acao\": []}"
