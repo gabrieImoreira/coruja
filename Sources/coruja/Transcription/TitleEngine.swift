@@ -177,7 +177,6 @@ enum TitleEngine {
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.httpBody = try JSONSerialization.data(withJSONObject: [
             "model": model,
-            "temperature": 0.3,
             "messages": [["role": "user", "content": prompt]],
         ])
         request.timeoutInterval = 60
