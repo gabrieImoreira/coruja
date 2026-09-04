@@ -39,6 +39,10 @@ struct SettingsRootView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
+                section("Aparência") {
+                    toggleRow("Tema escuro", isOn: $isDarkMode)
+                }
+
                 section("Gravação") {
                     labeledRow("Pasta das gravações") {
                         HStack(spacing: 8) {
@@ -163,7 +167,6 @@ struct SettingsRootView: View {
         }
         .frame(minWidth: 480, minHeight: 420)
         .background(theme.windowBg)
-        .preferredColorScheme(isDarkMode ? .dark : .light)
         // Monochrome, same as the rest of the app — native Toggle/Picker
         // default to the system accent color (blue) otherwise.
         .tint(theme.rowTitleColor)

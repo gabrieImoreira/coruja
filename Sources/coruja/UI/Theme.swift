@@ -32,7 +32,12 @@ struct Theme {
     var rowTitleColor: Color { isDark ? Color(hex: 0xF2F2F0) : Color(hex: 0x1A1A1A) }
     var rowStatusColor: Color { isDark ? .white.opacity(0.55) : .black.opacity(0.55) }
     var rowDurationColor: Color { isDark ? .white.opacity(0.35) : .black.opacity(0.35) }
-    var rowSelectedBg: Color { isDark ? Color(hex: 0x333331) : Color(hex: 0xEFEFED) }
+    // Was 0xEFEFED — nearly indistinguishable from sidebarBg (0xF1F1EF) in
+    // light mode, so the selected conversation read as unselected. Darkened
+    // for real contrast; rowSelectedAccent pairs with a left-edge bar in the
+    // sidebar row for a second, unmissable cue.
+    var rowSelectedBg: Color { isDark ? Color(hex: 0x333331) : Color(hex: 0xE3E3DF) }
+    var rowSelectedAccent: Color { rowTitleColor }
 
     var dotOn: Color { rowTitleColor }
     var dotOff: Color { isDark ? Color(hex: 0x6E6E6B) : Color(hex: 0x9A9A97) }

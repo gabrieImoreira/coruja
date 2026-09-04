@@ -22,7 +22,11 @@ enum SummaryOnDemand {
     /// `TranscriptionCoordinator.summaryFileName(for: type)`, and returns the
     /// rendered Markdown so the caller can display it immediately without a
     /// second disk read.
-    static func generate(for dir: URL, type: SummaryEngine.SummaryType) async throws -> String {
+    ///
+    /// - Parameter focus: optional user-supplied topic to steer the pass
+    ///   toward (see `SummaryEngine.summarize`'s `focus` parameter) — the
+    ///   notes window's "regenerate" popover, nil for a plain (re)generation.
+    static func generate(for dir: URL, type: SummaryEngine.SummaryType, focus: String? = nil) async throws -> String {
         guard let dto = TranscriptDTO.load(from: dir.appendingPathComponent(TranscriptionCoordinator.transcriptJSONFileName))
         else { throw GenerationError.noTranscript }
         guard let apiKey = Config.openaiApiKey() else { throw GenerationError.missingAPIKey }
@@ -34,7 +38,8 @@ enum SummaryOnDemand {
             segments: timed,
             apiKey: apiKey,
             model: Config.llmModel(),
-            summaryType: type
+            summaryType: type,
+            focus: focus
         )
         let rendered = SummaryEngine.render(summary, type: type)
         try rendered.write(

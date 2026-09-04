@@ -49,18 +49,24 @@ struct Run: ParsableCommand {
         // of menu bar state, same as any ordinary app (Cmd+Tab, clicking the
         // Dock icon, right-click menu).
         app.setActivationPolicy(.regular)
+        ThemeAppearance.install()
+
+        let delegate = AppDelegate()
+        app.delegate = delegate
+
+        let controller = AppController(root: root)
+
         // Hand-rolled NSApplication setup (no SwiftUI App/WindowGroup
         // lifecycle) never gets the standard Edit menu SwiftUI apps get for
         // free — without it, Cmd+C/V/X/A/Z do nothing anywhere in the app,
         // since AppKit resolves those key equivalents through a menu item,
         // not a built-in text-field key binding. Confirmed live: pasting an
         // API key into Settings silently failed until this was added.
-        app.mainMenu = Run.buildMainMenu()
-
-        let delegate = AppDelegate()
-        app.delegate = delegate
-
-        let controller = AppController(root: root)
+        // Built after `controller` exists so the app menu's "Configurações…"
+        // item (⌘,) — the standard Mac location, not just the status-bar
+        // dropdown or a gear icon buried in the notes window — can target it
+        // directly.
+        app.mainMenu = Run.buildMainMenu(settingsTarget: controller)
         delegate.onDockMenu = { [weak controller] in controller?.dockMenu() ?? NSMenu() }
         delegate.onReopen = { [weak controller] in controller?.openNotes() }
         delegate.onWillTerminate = { [weak controller] in controller?.prepareForTermination() }
@@ -86,7 +92,7 @@ struct Run: ParsableCommand {
     /// this, every text field in the app (including Settings' API key
     /// field) silently can't cut/copy/paste/select-all/undo.
     @MainActor
-    private static func buildMainMenu() -> NSMenu {
+    private static func buildMainMenu(settingsTarget: AppController) -> NSMenu {
         let mainMenu = NSMenu()
 
         let appMenuItem = NSMenuItem()
@@ -94,6 +100,14 @@ struct Run: ParsableCommand {
         let appMenu = NSMenu()
         appMenuItem.submenu = appMenu
         appMenu.addItem(withTitle: "Sobre a coruja", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(.separator())
+        let settingsItem = NSMenuItem(
+            title: "Configurações…",
+            action: #selector(AppController.openSettingsMenuClicked),
+            keyEquivalent: ","
+        )
+        settingsItem.target = settingsTarget
+        appMenu.addItem(settingsItem)
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Sair da coruja", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
 
@@ -364,40 +378,72 @@ final class AppController: NSObject {
 
     private func toggle() {
         if session == nil {
+            guard !recordingStatus.isStarting else { return } // already starting, ignore a double-click
             startSession()
         } else {
             stopSession()
         }
     }
 
+    /// `RecordingSession.init` + `.start()` sets up a CoreAudio process tap
+    /// and aggregate device (SystemAudioRecorder) plus an AVAudioEngine
+    /// graph (MicRecorder) — synchronous CoreAudio/AVFoundation setup that's
+    /// genuinely slow enough (confirmed live: a real, noticeable stutter) to
+    /// freeze the UI for its whole duration when run directly on the
+    /// button's main-actor click handler. Runs off the main actor instead;
+    /// `recordingStatus.isStarting` covers the gap with immediate feedback
+    /// (see NotesRootView's Gravar button) instead of an unresponsive click.
     private func startSession() {
-        do {
-            let newSession = try RecordingSession(root: root)
-            try newSession.start()
-            session = newSession
-            FileHandle.standardError.write(Data("● recording → \(newSession.dir.path)\n".utf8))
-        } catch {
-            FileHandle.standardError.write(Data("recording start failed: \(error)\n".utf8))
-            notifyUser(title: "Não foi possível iniciar a gravação", body: "\(error)")
-            return
-        }
+        recordingStatus.isStarting = true
+        Task {
+            let result: Result<RecordingSession, Error>
+            do {
+                let newSession = try await Task.detached(priority: .userInitiated) { [root] in
+                    let newSession = try RecordingSession(root: root)
+                    try newSession.start()
+                    return newSession
+                }.value
+                result = .success(newSession)
+            } catch {
+                result = .failure(error)
+            }
 
-        menuBar.update(recording: true, elapsed: "0:00")
-        recordingStatus.isRecording = true
-        recordingStatus.elapsed = "0:00"
-        // macOS overlays a system microphone badge on top of the menu bar
-        // icon while recording, which can leave it unclickable — this
-        // notification is the only reliable confirmation that recording
-        // actually started (and a reminder that ⌃⌥⌘R stops it).
-        notifyUser(title: "Gravando", body: "⌃⌥⌘R ou o ícone no Dock para parar")
-        // The Dock icon (always present, see runMain) badges while
-        // recording — unlike the menu bar icon, it isn't subject to macOS
-        // dropping it for space or overlaying its own mic-in-use badge, so
-        // right-click → Stop Recording always works.
-        NSApp.dockTile.badgeLabel = "●"
-        NSApp.dockTile.display()
-        ticker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.tick() }
+            recordingStatus.isStarting = false
+            switch result {
+            case .failure(let error):
+                FileHandle.standardError.write(Data("recording start failed: \(error)\n".utf8))
+                notifyUser(title: "Não foi possível iniciar a gravação", body: "\(error)")
+            case .success(let newSession):
+                // Another start already landed while this one was setting up
+                // (e.g. the meeting-detected prompt's own startSession() call
+                // racing a manual click) — tear down the redundant session
+                // instead of leaking an untracked recording no one can stop.
+                guard session == nil else {
+                    newSession.stop()
+                    return
+                }
+                session = newSession
+                FileHandle.standardError.write(Data("● recording → \(newSession.dir.path)\n".utf8))
+                menuBar.update(recording: true, elapsed: "0:00")
+                recordingStatus.isRecording = true
+                recordingStatus.elapsed = "0:00"
+                // macOS overlays a system microphone badge on top of the menu
+                // bar icon while recording, which can leave it unclickable —
+                // this notification is the only reliable confirmation that
+                // recording actually started (and a reminder that ⌃⌥⌘R stops
+                // it).
+                notifyUser(title: "Gravando", body: "⌃⌥⌘R ou o ícone no Dock para parar")
+                // The Dock icon (always present, see runMain) badges while
+                // recording — unlike the menu bar icon, it isn't subject to
+                // macOS dropping it for space or overlaying its own
+                // mic-in-use badge, so right-click → Stop Recording always
+                // works.
+                NSApp.dockTile.badgeLabel = "●"
+                NSApp.dockTile.display()
+                ticker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.tick() }
+                }
+            }
         }
     }
 
@@ -417,6 +463,10 @@ final class AppController: NSObject {
     }
 
     @objc private func dockMenuToggle() { toggle() }
+
+    /// Target of the app menu's "Configurações…" item (⌘,) — see
+    /// `Run.buildMainMenu`.
+    @objc fileprivate func openSettingsMenuClicked() { openSettings() }
 
     private func stopSession() {
         guard let session else { return }

@@ -72,11 +72,17 @@ enum SummaryEngine {
     ///   - chunkMinutes: size of each map step. 10min keeps a real meeting's
     ///     worth of context small enough for the model to stay grounded in,
     ///     without so many chunks that the reduce step loses coherence.
+    ///   - focus: optional user-supplied topic (from the notes window's
+    ///     "regenerate" popover) to steer both the per-chunk extraction and,
+    ///     for `.ata`, the final composition toward — still bound by
+    ///     `extractionRules` (nothing gets invented just because it was
+    ///     asked for). nil reproduces the plain, unsteered pass.
     static func summarize(
         segments: [TimedSegment],
         apiKey: String,
         model: String,
         summaryType: SummaryType,
+        focus: String? = nil,
         chunkMinutes: Double = 10,
         session: URLSession = .shared
     ) async throws -> Summary {
@@ -102,7 +108,7 @@ enum SummaryEngine {
         for chunk in chunks {
             let text = chunk.map { "\($0.speaker == "me" ? "Eu" : $0.speaker): \($0.text)" }.joined(separator: "\n")
             let partial = try await summarizeChunk(
-                transcriptText: text, apiKey: apiKey, model: model, summaryType: summaryType, session: session
+                transcriptText: text, apiKey: apiKey, model: model, summaryType: summaryType, focus: focus, session: session
             )
             if !partial.resumo.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 partialSummaries.append(partial.resumo)
@@ -118,7 +124,7 @@ enum SummaryEngine {
             // shape); composeAta is what actually writes the structured
             // document (numbered sections, tables, the closing checklists).
             finalSummary = try await composeAta(
-                from: partialSummaries, actionItems: actionItems, apiKey: apiKey, model: model, session: session
+                from: partialSummaries, actionItems: actionItems, apiKey: apiKey, model: model, focus: focus, session: session
             )
         case .topicos:
             if partialSummaries.count <= 1 {
@@ -163,6 +169,21 @@ enum SummaryEngine {
         }
     }
 
+    /// User-supplied topic to steer a pass toward (see `summarize`'s `focus`
+    /// parameter) — an extra instruction line, not a relaxation of
+    /// `extractionRules`: still bound to what's actually in the transcript.
+    /// Empty string when there's no focus, so it drops out of the prompt
+    /// cleanly instead of leaving a dangling blank instruction.
+    private static func focusInstructions(_ focus: String?) -> String {
+        guard let focus, !focus.isEmpty else { return "" }
+        return """
+        FOCO DESTA PASSAGEM: dê atenção especial a "\(focus)" — inclua todo \
+        detalhe relevante sobre esse assunto que estiver no texto, mesmo que \
+        pareça secundário. Isso não muda as regras acima: só relate o que \
+        realmente foi dito sobre esse assunto, sem inventar nada.
+        """
+    }
+
     private static let extractionRules = """
     REGRAS OBRIGATÓRIAS, sem exceção:
     - NÃO invente nenhuma informação que não esteja literalmente no texto — \
@@ -187,6 +208,7 @@ enum SummaryEngine {
         apiKey: String,
         model: String,
         summaryType: SummaryType,
+        focus: String?,
         session: URLSession
     ) async throws -> Summary {
         let shapeInstructions: String
@@ -231,6 +253,8 @@ enum SummaryEngine {
         Você recebe abaixo a transcrição de um trecho de uma reunião de trabalho, em português.
 
         \(extractionRules)
+
+        \(focusInstructions(focus))
 
         \(shapeInstructions)
 
@@ -292,6 +316,7 @@ enum SummaryEngine {
         actionItems: [ActionItem],
         apiKey: String,
         model: String,
+        focus: String?,
         session: URLSession
     ) async throws -> String {
         let notes = partials.enumerated()
@@ -325,6 +350,7 @@ enum SummaryEngine {
         por trecho — organize por ASSUNTO, não pela ordem cronológica dos trechos.
         - Toda pendência, decisão pendente ou item de ação deve aparecer na tabela final \
         "Questões em aberto" — não deixe nada órfão só na seção temática.
+        \(focus.map { "- FOCO DESTA ATA: dê à seção sobre \"\($0)\" o maior detalhe possível — não corte nada que as notas tragam sobre esse assunto. Isso não permite inventar nada além do que as notas dizem." } ?? "")
 
         ESTRUTURA OBRIGATÓRIA DO DOCUMENTO (em Markdown):
 

@@ -6,5 +6,6 @@ import Foundation
 @MainActor
 final class RecordingStatus: ObservableObject {
     @Published var isRecording = false
+    @Published var isStarting = false
     @Published var elapsed: String?
 }

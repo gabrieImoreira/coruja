@@ -84,14 +84,16 @@ final class MenuBarController {
         }
     }
 
-    /// Reflect recording state in the icon tint and menu item titles. The
-    /// menu bar shows only the waveform icon (red while recording); the
-    /// elapsed counter lives in the menu's state label. Call once a second
-    /// while recording.
+    /// Reflect recording state in the menu item titles. The owl glyph itself
+    /// stays monochrome (a `.isTemplate` image already adapts to the system
+    /// light/dark menu bar on its own) — recording state shows only in the
+    /// menu's state label and item titles, not by recoloring the icon.
+    /// Tried tinting the whole glyph solid red while recording; live it just
+    /// read as a red blob, not recognizably the owl anymore. Call once a
+    /// second while recording.
     func update(recording: Bool, elapsed: String?) {
         stateLabel.title = recording ? "● gravando · \(elapsed ?? "0:00")" : "ocioso"
         toggleItem.title = recording ? "Parar gravação" : "Iniciar gravação"
-        statusItem.button?.contentTintColor = recording ? .systemRed : nil
     }
 
     /// Show transcription progress/failure as a second status line in the

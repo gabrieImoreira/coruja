@@ -32,6 +32,8 @@ struct NotesRootView: View {
     @State private var summaryContent: [SummaryEngine.SummaryType: String] = [:]
     @State private var summaryGenerating: SummaryEngine.SummaryType?
     @State private var summaryError: String?
+    @State private var showingFocusPopover = false
+    @State private var focusDraft = ""
 
     private var theme: Theme { Theme(isDark: isDarkMode) }
 
@@ -53,7 +55,6 @@ struct NotesRootView: View {
         }
         .frame(minWidth: 780, minHeight: 520)
         .background(theme.windowBg)
-        .preferredColorScheme(isDarkMode ? .dark : .light)
         .onAppear(perform: reload)
         .onChange(of: status.isRecording) { wasRecording, isRecording in
             // A session folder only appears once stop() writes .meta.json —
@@ -140,7 +141,11 @@ struct NotesRootView: View {
 
             Button(action: onToggleRecording) {
                 HStack(spacing: 6) {
-                    if status.isRecording {
+                    if status.isStarting {
+                        ProgressView()
+                            .controlSize(.mini)
+                            .frame(width: 8, height: 8)
+                    } else if status.isRecording {
                         RoundedRectangle(cornerRadius: 1.5, style: .continuous)
                             .fill(Color.white)
                             .frame(width: 7, height: 7)
@@ -150,7 +155,7 @@ struct NotesRootView: View {
                             .fill(theme.recordIdleColor)
                             .frame(width: 6, height: 6)
                     }
-                    Text(status.isRecording ? "Parar" : "Gravar")
+                    Text(status.isStarting ? "Iniciando…" : (status.isRecording ? "Parar" : "Gravar"))
                         .font(.system(size: 12, weight: .medium))
                 }
                 .foregroundStyle(status.isRecording ? .white : theme.recordIdleColor)
@@ -161,6 +166,7 @@ struct NotesRootView: View {
                 )
             }
             .buttonStyle(.plain)
+            .disabled(status.isStarting)
             .onChange(of: status.isRecording) { _, isRecording in
                 if isRecording {
                     withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
@@ -190,37 +196,10 @@ struct NotesRootView: View {
             }
             .buttonStyle(.plain)
             .help("Configurações")
-
-            themeToggle
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 14)
         .background(theme.windowBg)
-    }
-
-    private var themeToggle: some View {
-        HStack(spacing: 8) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.15)) { isDarkMode.toggle() }
-            } label: {
-                ZStack(alignment: isDarkMode ? .trailing : .leading) {
-                    Capsule()
-                        .fill(isDarkMode ? Color(hex: 0xF2F2F0) : Color.black.opacity(0.2))
-                    Circle()
-                        .fill(isDarkMode ? Color(hex: 0x1A1A1A) : .white)
-                        .frame(width: 16, height: 16)
-                        .shadow(color: .black.opacity(0.3), radius: 1, y: 1)
-                        .padding(2)
-                }
-                .frame(width: 34, height: 20)
-            }
-            .buttonStyle(.plain)
-
-            Text(isDarkMode ? "Escuro" : "Claro")
-                .font(.system(size: 11.5))
-                .foregroundStyle(theme.pathColor)
-                .frame(width: 42, alignment: .leading)
-        }
     }
 
     private var currentSession: SessionEntry? {
@@ -302,6 +281,14 @@ struct NotesRootView: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(selected ? theme.rowSelectedBg : .clear)
         )
+        .overlay(alignment: .leading) {
+            if selected {
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .fill(theme.rowSelectedAccent)
+                    .frame(width: 3, height: 18)
+                    .padding(.leading, 2)
+            }
+        }
         .padding(.horizontal, 8)
         .contentShape(Rectangle())
         .onTapGesture { selection = session.id }
@@ -482,17 +469,89 @@ struct NotesRootView: View {
     // MARK: - Summary / ata
 
     private func summaryBody(for session: SessionEntry) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Picker("", selection: $summaryTypeShown) {
-                Text("Resumo por tópico").tag(SummaryEngine.SummaryType.topicos)
-                Text("Ata da reunião").tag(SummaryEngine.SummaryType.ata)
+        VStack(alignment: .leading, spacing: 10) {
+            Text("DOCUMENTO")
+                .font(.system(size: 10.5, weight: .bold))
+                .tracking(0.8)
+                .foregroundStyle(theme.groupLabelColor)
+
+            HStack(spacing: 10) {
+                Picker("", selection: $summaryTypeShown) {
+                    Text("Resumo por tópico").tag(SummaryEngine.SummaryType.topicos)
+                    Text("Ata da reunião").tag(SummaryEngine.SummaryType.ata)
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 280)
+                .tint(theme.rowTitleColor)
+
+                if summaryContent[summaryTypeShown] != nil {
+                    regenerateButton(for: session)
+                }
             }
-            .labelsHidden()
-            .pickerStyle(.segmented)
-            .frame(maxWidth: 280)
-            .tint(theme.rowTitleColor)
 
             summaryContentView(for: session)
+        }
+        .padding(.bottom, 4)
+    }
+
+    /// "Repetir" glyph next to the picker — only shown once a summary/ata
+    /// already exists for the type in view (regenerating something that was
+    /// never generated is just "Gerar", the empty-state button below).
+    /// Opens a popover asking what to focus on; empty input regenerates
+    /// plain, same prompt as the first pass.
+    private func regenerateButton(for session: SessionEntry) -> some View {
+        Button {
+            focusDraft = ""
+            showingFocusPopover = true
+        } label: {
+            if summaryGenerating == summaryTypeShown {
+                ProgressView().controlSize(.small)
+            } else {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(theme.pathColor)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(summaryGenerating != nil)
+        .help("Regenerar \(summaryTypeShown == .ata ? "ata" : "resumo")")
+        .popover(isPresented: $showingFocusPopover, arrowEdge: .bottom) {
+            focusPopover(for: session)
+        }
+    }
+
+    private func focusPopover(for session: SessionEntry) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Focar em quê? (opcional)")
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(theme.headerTitleColor)
+            TextField("Ex.: decisões sobre o fluxo de reembolso", text: $focusDraft)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 280)
+                .onSubmit { submitFocusedRegeneration(for: session) }
+            HStack {
+                Spacer()
+                Button("Regenerar") { submitFocusedRegeneration(for: session) }
+                    .buttonStyle(.borderedProminent)
+                    .tint(theme.rowTitleColor)
+            }
+        }
+        .padding(14)
+    }
+
+    private func submitFocusedRegeneration(for session: SessionEntry) {
+        showingFocusPopover = false
+        let trimmed = focusDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        generateSummary(summaryTypeShown, for: session, focus: trimmed.isEmpty ? nil : trimmed)
+        // The title is a separate pipeline (TitleEngine, not SummaryEngine) —
+        // "regenerate" reasonably implies refreshing the meeting's name too,
+        // not just the document. Fire-and-forget: a failure here (rate
+        // limit, no keywords) shouldn't block or error out the resumo/ata
+        // regeneration above.
+        Task {
+            _ = try? await TitleOnDemand.regenerate(for: session.id)
+            reload()
         }
     }
 
@@ -696,12 +755,12 @@ struct NotesRootView: View {
         .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(theme.border))
     }
 
-    private func generateSummary(_ type: SummaryEngine.SummaryType, for session: SessionEntry) {
+    private func generateSummary(_ type: SummaryEngine.SummaryType, for session: SessionEntry, focus: String? = nil) {
         summaryGenerating = type
         summaryError = nil
         Task {
             do {
-                let rendered = try await SummaryOnDemand.generate(for: session.id, type: type)
+                let rendered = try await SummaryOnDemand.generate(for: session.id, type: type, focus: focus)
                 summaryContent[type] = rendered
             } catch {
                 summaryError = "\(error)"

@@ -4,7 +4,12 @@ import Foundation
 /// (mic = you, system = them) plus a meta.json written on clean stop. Tracks
 /// are separate on purpose — whisper does better on clean single-source audio,
 /// and two tracks give free two-party diarization.
-final class RecordingSession {
+/// `@unchecked Sendable`: constructed and started off the main actor (see
+/// AppController.startSession — CoreAudio process-tap/aggregate-device setup
+/// is genuinely slow enough to stutter the UI on the button's click handler)
+/// then handed to the main actor as a single owner, same pattern as
+/// MicRecorder.
+final class RecordingSession: @unchecked Sendable {
     let dir: URL
     let startedAt = Date()
 
