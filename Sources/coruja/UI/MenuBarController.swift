@@ -109,13 +109,27 @@ final class MenuBarController {
     /// its transparency flattened onto opaque white (confirmed live —
     /// rendered as a solid white square in the menu bar).
     ///
-    /// Built against an explicit 8-bit sRGB `NSBitmapImageRep` rather than
-    /// `lockFocus()` — an earlier lockFocus-based version produced pixel-
-    /// perfect data (verified by sampling: opaque black head, transparent
-    /// eyes) but rendered as an invisible status item live; this explicit-
-    /// bitmap version is confirmed working in the real menu bar. `.clear`
-    /// compositing punches real alpha holes for the eyes, which is what
-    /// `isTemplate` needs outside the owl shape.
+    /// Built against an explicit 8-bit sRGB `NSBitmapImageRep` — two other
+    /// approaches were tried and failed live in this app's hand-rolled
+    /// `NSApplication` setup (no SwiftUI `App`/`WindowGroup` lifecycle):
+    /// `lockFocus()` rendered as a fully invisible status item, and
+    /// `NSImage(size:flipped:drawingHandler:)` — normally the more modern,
+    /// recommended pattern — also rendered invisible here, presumably
+    /// because its drawing closure depends on a graphics context this app's
+    /// unusual run loop never makes current at the right moment. This
+    /// explicit-bitmap version is the one confirmed to actually draw
+    /// something reliably.
+    ///
+    /// The color-adaptation bug (glyph stuck black instead of inverting to
+    /// white on a dark-looking menu bar) that this rendering approach was
+    /// wrongly blamed for was actually `ThemeAppearance` forcing
+    /// `NSApp.appearance` app-wide — that overrides the status item's own
+    /// vibrancy-driven tinting. See ThemeAppearance.swift; it now only
+    /// touches window appearance, not `NSApp.appearance`.
+    ///
+    /// Solid silhouette — no eye-mask cutout. Simpler is more robust for a
+    /// template icon, and at 18pt the two-tone eye detail was never more
+    /// than a smudge anyway.
     ///
     /// "Clássica" mark — same outline as `Packaging/AppIcon.icns` (see
     /// `scripts/generate-icon.swift`), so the menu bar glyph and the Dock
@@ -148,12 +162,6 @@ final class MenuBarController {
         ctx.cgContext.translateBy(x: margin, y: canvas - margin)
         ctx.cgContext.scaleBy(x: ownScale, y: -ownScale)
 
-        // Solid silhouette — no eye-mask cutout. A punched-alpha-hole design
-        // (clear-composited eyes + opaque pupils redrawn inside) confirmed
-        // live to break macOS's template-image color adaptation: the glyph
-        // rendered in fixed black instead of inverting to white on a dark
-        // menu bar. A single uniform opaque shape is the robust pattern —
-        // every ordinary monochrome menu bar icon uses it.
         NSColor.black.setFill()
         OwlMark.outline().fill()
         OwlMark.rotatedEllipse(cx: 19, cy: 9, rx: 4.2, ry: 7.5, degrees: -24).fill()
