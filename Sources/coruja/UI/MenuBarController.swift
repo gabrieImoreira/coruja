@@ -148,19 +148,16 @@ final class MenuBarController {
         ctx.cgContext.translateBy(x: margin, y: canvas - margin)
         ctx.cgContext.scaleBy(x: ownScale, y: -ownScale)
 
+        // Solid silhouette — no eye-mask cutout. A punched-alpha-hole design
+        // (clear-composited eyes + opaque pupils redrawn inside) confirmed
+        // live to break macOS's template-image color adaptation: the glyph
+        // rendered in fixed black instead of inverting to white on a dark
+        // menu bar. A single uniform opaque shape is the robust pattern —
+        // every ordinary monochrome menu bar icon uses it.
         NSColor.black.setFill()
         OwlMark.outline().fill()
         OwlMark.rotatedEllipse(cx: 19, cy: 9, rx: 4.2, ry: 7.5, degrees: -24).fill()
         OwlMark.rotatedEllipse(cx: 45, cy: 9, rx: 4.2, ry: 7.5, degrees: 24).fill()
-
-        ctx.compositingOperation = .clear
-        NSBezierPath(ovalIn: NSRect(x: 15, y: 18, width: 20, height: 20)).fill()
-        NSBezierPath(ovalIn: NSRect(x: 29, y: 18, width: 20, height: 20)).fill()
-        ctx.compositingOperation = .sourceOver
-
-        NSColor.black.setFill()
-        NSBezierPath(ovalIn: NSRect(x: 21.8, y: 24.8, width: 6.4, height: 6.4)).fill()
-        NSBezierPath(ovalIn: NSRect(x: 35.8, y: 24.8, width: 6.4, height: 6.4)).fill()
 
         NSGraphicsContext.restoreGraphicsState()
 
