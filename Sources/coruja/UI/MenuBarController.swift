@@ -89,11 +89,16 @@ final class MenuBarController {
     /// light/dark menu bar on its own) — recording state shows only in the
     /// menu's state label and item titles, not by recoloring the icon.
     /// Tried tinting the whole glyph solid red while recording; live it just
-    /// read as a red blob, not recognizably the owl anymore. Call once a
-    /// second while recording.
+    /// read as a red blob, not recognizably the owl anymore. Still resets
+    /// `contentTintColor` to `nil` every call as a defensive no-op — it's
+    /// already `nil` by default, confirmed via a live debug dump
+    /// (`button.contentTintColor`, `button.effectiveAppearance`), so this
+    /// isn't load-bearing, just cheap insurance against a future change
+    /// setting it. Call once a second while recording.
     func update(recording: Bool, elapsed: String?) {
         stateLabel.title = recording ? "● gravando · \(elapsed ?? "0:00")" : "ocioso"
         toggleItem.title = recording ? "Parar gravação" : "Iniciar gravação"
+        statusItem.button?.contentTintColor = nil
     }
 
     /// Show transcription progress/failure as a second status line in the
@@ -109,27 +114,27 @@ final class MenuBarController {
     /// its transparency flattened onto opaque white (confirmed live —
     /// rendered as a solid white square in the menu bar).
     ///
-    /// Built against an explicit 8-bit sRGB `NSBitmapImageRep` — two other
-    /// approaches were tried and failed live in this app's hand-rolled
-    /// `NSApplication` setup (no SwiftUI `App`/`WindowGroup` lifecycle):
-    /// `lockFocus()` rendered as a fully invisible status item, and
-    /// `NSImage(size:flipped:drawingHandler:)` — normally the more modern,
-    /// recommended pattern — also rendered invisible here, presumably
-    /// because its drawing closure depends on a graphics context this app's
-    /// unusual run loop never makes current at the right moment. This
-    /// explicit-bitmap version is the one confirmed to actually draw
-    /// something reliably.
+    /// Built against an explicit 8-bit sRGB `NSBitmapImageRep` rather than
+    /// `lockFocus()` — an earlier lockFocus-based version produced pixel-
+    /// perfect data (verified by sampling: opaque black head, transparent
+    /// eyes) but rendered as an invisible status item live; this explicit-
+    /// bitmap version is confirmed working in the real menu bar. `.clear`
+    /// compositing punches real alpha holes for the eyes, which is what
+    /// `isTemplate` needs outside the owl shape.
     ///
-    /// The color-adaptation bug (glyph stuck black instead of inverting to
-    /// white on a dark-looking menu bar) that this rendering approach was
-    /// wrongly blamed for was actually `ThemeAppearance` forcing
-    /// `NSApp.appearance` app-wide — that overrides the status item's own
-    /// vibrancy-driven tinting. See ThemeAppearance.swift; it now only
-    /// touches window appearance, not `NSApp.appearance`.
-    ///
-    /// Solid silhouette — no eye-mask cutout. Simpler is more robust for a
-    /// template icon, and at 18pt the two-tone eye detail was never more
-    /// than a smudge anyway.
+    /// A later session chased a report that this glyph "doesn't adapt" on a
+    /// dark-looking menu bar, through several wrong theories (the eye-mask
+    /// holes, the drawing API, `ThemeAppearance` forcing `NSApp.appearance`
+    /// — see ThemeAppearance.swift for the one real bug found along the
+    /// way) before a live debug dump settled it: `isTemplate` is `true`,
+    /// `contentTintColor` is `nil`, and `button.effectiveAppearance` really
+    /// is `VibrantLight` — matching this Mac's System Appearance (Light).
+    /// The glyph is rendering exactly as a template image should. The menu
+    /// bar only *looks* dark here because of a dark desktop picture showing
+    /// through its translucency; that visual color is independent of the
+    /// System Appearance setting third-party template icons actually key
+    /// off. Nothing to fix in this file — restored to the last confirmed
+    /// shape after the detour.
     ///
     /// "Clássica" mark — same outline as `Packaging/AppIcon.icns` (see
     /// `scripts/generate-icon.swift`), so the menu bar glyph and the Dock
@@ -166,6 +171,15 @@ final class MenuBarController {
         OwlMark.outline().fill()
         OwlMark.rotatedEllipse(cx: 19, cy: 9, rx: 4.2, ry: 7.5, degrees: -24).fill()
         OwlMark.rotatedEllipse(cx: 45, cy: 9, rx: 4.2, ry: 7.5, degrees: 24).fill()
+
+        ctx.compositingOperation = .clear
+        NSBezierPath(ovalIn: NSRect(x: 15, y: 18, width: 20, height: 20)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 29, y: 18, width: 20, height: 20)).fill()
+        ctx.compositingOperation = .sourceOver
+
+        NSColor.black.setFill()
+        NSBezierPath(ovalIn: NSRect(x: 21.8, y: 24.8, width: 6.4, height: 6.4)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 35.8, y: 24.8, width: 6.4, height: 6.4)).fill()
 
         NSGraphicsContext.restoreGraphicsState()
 
